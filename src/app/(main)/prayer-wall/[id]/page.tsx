@@ -129,7 +129,7 @@ export default function PrayerDetailPage() {
 
     // Check if already prayed
     try {
-      const raw = localStorage.getItem("graceapp_prayed");
+      const raw = localStorage.getItem("walkdaily_prayed");
       if (raw) {
         const set = new Set(JSON.parse(raw));
         setPrayed(set.has(prayerId));
@@ -229,10 +229,10 @@ export default function PrayerDetailPage() {
     if (!prayer || prayed) return;
 
     try {
-      const raw = localStorage.getItem("graceapp_prayed");
+      const raw = localStorage.getItem("walkdaily_prayed");
       const set = raw ? new Set(JSON.parse(raw)) : new Set();
       set.add(prayerId);
-      localStorage.setItem("graceapp_prayed", JSON.stringify([...set]));
+      localStorage.setItem("walkdaily_prayed", JSON.stringify([...set]));
       setPrayed(true);
 
       setPrayer((prev) => prev ? { ...prev, pray_count: prev.pray_count + 1 } : prev);

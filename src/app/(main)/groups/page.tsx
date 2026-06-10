@@ -135,7 +135,7 @@ export default function GroupsPage() {
           className="text-base max-w-md leading-relaxed mb-2"
           style={{ color: "var(--text-secondary)" }}
         >
-          Study Groups are coming soon to GraceApp. Join a small group, study
+          Study Groups are coming soon to Walk Daily. Join a small group, study
           Scripture together, and pray with others in your area.
         </p>
         <div

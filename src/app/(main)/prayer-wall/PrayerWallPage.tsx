@@ -52,7 +52,7 @@ type CommentCountRow = {
 /* ------------------------------------------------------------------ */
 
 const PAGE_SIZE = 20;
-const PRAYED_KEY = "graceapp_prayed";
+const PRAYED_KEY = "walkdaily_prayed";
 const PRAY_TIMER_SECONDS = 30;
 
 function getPrayedSet(): Set<string> {

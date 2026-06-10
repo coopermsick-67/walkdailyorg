@@ -86,7 +86,7 @@ npm start
 ## Project Structure
 
 ```
-graceapp/
+walkdaily/
 ├── public/
 │   ├── manifest.json          # PWA manifest
 │   ├── icon.svg               # App icon (cross + book motif)
