@@ -9,13 +9,13 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { JournalEditor } from "@/components/journal/JournalEditor";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { streamJournalReflection } from "@/lib/ai/client";
-import { Heart, Smile, Frown, Sprout, Search, Check } from "lucide-react";
+import { Heart, Smile, Frown, Sprout, Search, Check, Sparkles, Cloud, Sunrise } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-type Mood = "peaceful" | "grateful" | "struggling" | "growing" | "seeking";
+type Mood = string;
 
 interface JournalEntry {
   id: string;
@@ -33,12 +33,15 @@ interface JournalEntry {
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-const MOODS: { value: Mood; label: string; icon: React.ReactNode }[] = [
+const MOODS: { value: string; label: string; icon: React.ReactNode }[] = [
   { value: "peaceful", label: "Peaceful", icon: <Heart size={16} /> },
   { value: "grateful", label: "Grateful", icon: <Smile size={16} /> },
   { value: "struggling", label: "Struggling", icon: <Frown size={16} /> },
   { value: "growing", label: "Growing", icon: <Sprout size={16} /> },
   { value: "seeking", label: "Seeking", icon: <Search size={16} /> },
+  { value: "joyful", label: "Joyful", icon: <Sparkles size={16} /> },
+  { value: "anxious", label: "Anxious", icon: <Cloud size={16} /> },
+  { value: "hopeful", label: "Hopeful", icon: <Sunrise size={16} /> },
 ];
 
 const PAGE_SIZE = 10;
@@ -570,7 +573,10 @@ function JournalEntryCard({
   aiReflection: string | null;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const mood = MOODS.find((m) => m.value === entry.mood);
+  const moodPreset = MOODS.find((m) => m.value === entry.mood);
+  const moodLabel = entry.mood
+    ? (moodPreset?.label ?? entry.mood)
+    : null;
   const preview = stripHtml(entry.body);
   const truncated =
     preview.length > 150 ? preview.slice(0, 150) + "..." : preview;
@@ -586,13 +592,18 @@ function JournalEntryCard({
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          {mood && (
+          {entry.mood && (
             <span
-              className="text-lg"
-              title={mood.label}
-              aria-label={mood.label}
+              className="text-sm font-medium px-2 py-0.5 rounded-full flex-shrink-0"
+              title={moodLabel ?? entry.mood}
+              aria-label={moodLabel ?? entry.mood}
+              style={{
+                background: "rgba(201,162,39,0.08)",
+                color: "var(--color-accent-500)",
+              }}
             >
-              {mood.icon}
+              {moodPreset ? moodPreset.icon : "✏️"}{" "}
+              {moodLabel}
             </span>
           )}
           <div>

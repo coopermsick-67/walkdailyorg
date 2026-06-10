@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Heart, Smile, Frown, Sprout, Search } from "lucide-react";
+import { Heart, Smile, Frown, Sprout, Search, Sparkles, Cloud, Sunrise } from "lucide-react";
 
-type Mood = "peaceful" | "grateful" | "struggling" | "growing" | "seeking";
+type Mood = string;
 
 interface JournalEntry {
   id: string;
@@ -36,12 +36,15 @@ const BIBLE_BOOKS: string[] = [
   "Jude", "Revelation",
 ];
 
-const MOODS: { value: Mood; label: string; icon: React.ReactNode }[] = [
+const PRESET_MOODS: { value: string; label: string; icon: React.ReactNode }[] = [
   { value: "peaceful", label: "Peaceful", icon: <Heart size={16} /> },
   { value: "grateful", label: "Grateful", icon: <Smile size={16} /> },
   { value: "struggling", label: "Struggling", icon: <Frown size={16} /> },
   { value: "growing", label: "Growing", icon: <Sprout size={16} /> },
   { value: "seeking", label: "Seeking", icon: <Search size={16} /> },
+  { value: "joyful", label: "Joyful", icon: <Sparkles size={16} /> },
+  { value: "anxious", label: "Anxious", icon: <Cloud size={16} /> },
+  { value: "hopeful", label: "Hopeful", icon: <Sunrise size={16} /> },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -56,9 +59,17 @@ interface JournalEditorProps {
   onCancel: () => void;
 }
 
+const PRESET_MOOD_VALUES = PRESET_MOODS.map((m) => m.value);
+
 export function JournalEditor({ entry, onSave, onCancel }: JournalEditorProps) {
   const [title, setTitle] = useState(entry?.title || "");
-  const [mood, setMood] = useState<Mood | null>(entry?.mood || null);
+  const [mood, setMood] = useState<string | null>(entry?.mood || null);
+  const [otherText, setOtherText] = useState(
+    entry?.mood && !PRESET_MOOD_VALUES.includes(entry.mood) ? entry.mood : ""
+  );
+  const [showOtherInput, setShowOtherInput] = useState(
+    !!(entry?.mood && !PRESET_MOOD_VALUES.includes(entry.mood))
+  );
   const [isPublic, setIsPublic] = useState(entry?.is_public || false);
   const [body, setBody] = useState(entry?.body || "");
   const [saving, setSaving] = useState(false);
@@ -269,10 +280,13 @@ export function JournalEditor({ entry, onSave, onCancel }: JournalEditorProps) {
           How are you feeling?
         </label>
         <div className="flex gap-2 flex-wrap">
-          {MOODS.map((m) => (
+          {PRESET_MOODS.map((m) => (
             <button
               key={m.value}
-              onClick={() => setMood(mood === m.value ? null : m.value)}
+              onClick={() => {
+                setShowOtherInput(false);
+                setMood(mood === m.value ? null : m.value);
+              }}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all"
               style={{
                 background:
@@ -295,7 +309,50 @@ export function JournalEditor({ entry, onSave, onCancel }: JournalEditorProps) {
               <span>{m.label}</span>
             </button>
           ))}
+          {/* Other button */}
+          <button
+            onClick={() => {
+              setShowOtherInput(!showOtherInput);
+              if (!showOtherInput) {
+                setMood(otherText.trim() || null);
+              } else {
+                if (mood && !PRESET_MOOD_VALUES.includes(mood)) setMood(null);
+              }
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all"
+            style={{
+              background: showOtherInput ? "var(--color-accent-500)" : "var(--input-bg)",
+              color: showOtherInput ? "#fff" : "var(--text-secondary)",
+              border: "1px solid",
+              borderColor: showOtherInput ? "var(--color-accent-500)" : "var(--input-border)",
+              minHeight: 44,
+            }}
+          >
+            <span>✏️</span>
+            <span>Other</span>
+          </button>
         </div>
+        {showOtherInput && (
+          <input
+            type="text"
+            value={otherText}
+            onChange={(e) => {
+              const val = e.target.value.slice(0, 30);
+              setOtherText(val);
+              setMood(val.trim() || null);
+            }}
+            placeholder="How are you feeling? (max 30 chars)"
+            maxLength={30}
+            className="mt-2 w-full px-4 py-2.5 rounded-xl text-sm"
+            style={{
+              background: "var(--input-bg)",
+              border: "1px solid var(--input-border)",
+              color: "var(--text-primary)",
+              minHeight: 44,
+            }}
+            autoFocus
+          />
+        )}
       </div>
 
       {/* Verse tags */}
