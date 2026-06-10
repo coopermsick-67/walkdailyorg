@@ -435,7 +435,7 @@ export default function HomePage() {
   const streak = profile?.streak_days || 0;
 
   return (
-    <div className="flex-1 flex flex-col max-w-3xl mx-auto px-4 pb-24">
+    <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full px-4 pb-24">
       {/* Easter egg overlay */}
       {showEasterEgg && <EasterEggOverlay onClose={() => setShowEasterEgg(false)} />}
 

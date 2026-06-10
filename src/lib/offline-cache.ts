@@ -6,11 +6,13 @@ const BOOKMARKS_STORE = "bible-bookmarks";
 const HIGHLIGHTS_STORE = "bible-highlights";
 const DAILY_VERSE_STORE = "bible-daily-verse";
 
-// Custom stores for proper typing
+// Each store gets its own DB to avoid idb-keyval's single-store-per-DB limitation.
+// Sharing a DB name across createStore() calls causes "object store not found" errors
+// when the onupgradeneeded handler for each call only creates one store per open().
 const bibleStore = createStore("bible-cache-db", BIBLE_STORE);
-const bookmarksStore = createStore("bible-cache-db", BOOKMARKS_STORE);
-const highlightsStore = createStore("bible-cache-db", HIGHLIGHTS_STORE);
-const dailyVerseStore = createStore("bible-cache-db", DAILY_VERSE_STORE);
+const bookmarksStore = createStore("bible-bookmarks-db", BOOKMARKS_STORE);
+const highlightsStore = createStore("bible-highlights-db", HIGHLIGHTS_STORE);
+const dailyVerseStore = createStore("bible-daily-verse-db", DAILY_VERSE_STORE);
 
 /* ---------- Chapter Cache ---------- */
 
