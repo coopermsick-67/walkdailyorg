@@ -13,7 +13,7 @@ export const runtime = "edge";
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-const DAILY_LIMIT = 50;
+const DAILY_LIMIT = 100;
 const MAX_BODY_BYTES = 64_000;
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || process.env.NEXT_PUBLIC_OPENROUTER_API_KEY || "";
@@ -360,7 +360,7 @@ export async function POST(request: NextRequest) {
     if (!rateLimit.allowed) {
       return NextResponse.json(
         {
-          error: `Daily AI limit reached (${DAILY_LIMIT}/day). Please try again tomorrow.`,
+          error: `Daily AI limit reached (${DAILY_LIMIT} messages/day). Please try again tomorrow.`,
           limit: DAILY_LIMIT,
         },
         { status: 429 },

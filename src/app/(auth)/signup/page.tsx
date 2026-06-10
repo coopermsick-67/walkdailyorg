@@ -67,11 +67,11 @@ export default function SignupPage() {
       if (authData.user) {
         await supabase
           .from("profiles")
-          .update({
+          .upsert({
+            id: authData.user.id,
             display_name: displayName,
             denomination: denomination || null,
-          })
-          .eq("id", authData.user.id);
+          });
       }
 
       router.push("/onboarding");

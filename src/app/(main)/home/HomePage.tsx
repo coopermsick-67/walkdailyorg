@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { BookOpen, BookMarked, Sparkles, ChevronRight, Brain, PenLine, Heart } from "lucide-react";
+import { getFallbackDailyVerse } from "@/lib/bible-api";
 import LevelBadge from "@/components/home/LevelBadge";
 import StreakBadge from "@/components/home/StreakBadge";
 
@@ -250,7 +251,12 @@ export default function HomePage() {
         .select("display_name, streak_days, current_reading_book, current_reading_chapter")
         .eq("id", user.id)
         .single();
-      if (data) setProfile(data);
+      if (data) {
+        if (!data.display_name) {
+          data.display_name = user.user_metadata?.full_name || null;
+        }
+        setProfile(data);
+      }
     } catch {
       /* silent */
     }
@@ -266,9 +272,15 @@ export default function HomePage() {
         .select("reference, verse_text, translation")
         .eq("date", today)
         .single();
-      if (data) setDailyVerse({ reference: data.reference, text: data.verse_text, translation: data.translation });
+      if (data) {
+        setDailyVerse({ reference: data.reference, text: data.verse_text, translation: data.translation });
+      } else {
+        const fallback = getFallbackDailyVerse();
+        setDailyVerse(fallback);
+      }
     } catch {
-      /* silent */
+      const fallback = getFallbackDailyVerse();
+      setDailyVerse(fallback);
     }
     setLoadingVerse(false);
   }, []);

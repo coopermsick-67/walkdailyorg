@@ -1,6 +1,5 @@
-const BIBLE_API_URL = "https://rest.api.bible";
-const BIBLE_API_KEY =
-  process.env.NEXT_PUBLIC_BIBLE_API_KEY || process.env.BIBLE_API_KEY;
+// Bible API — uses bible-api.com (free, no key required)
+const BIBLE_API_BASE = "https://bible-api.com";
 
 export type BibleTranslation = {
   id: string;
@@ -17,12 +16,6 @@ export type BibleBook = {
   chapters: string[];
 };
 
-export type BibleChapter = {
-  id: string;
-  number: string;
-  reference: string;
-};
-
 export type BibleVerse = {
   verse: string;
   text: string;
@@ -35,145 +28,168 @@ export type SearchResult = {
   total: number;
 };
 
-// Known translation IDs for quick reference
+// Supported translations on bible-api.com
 export const POPULAR_TRANSLATIONS: Record<string, string> = {
-  ESV: "de4e12af7f28f599-02",
-  NIV: "78a9f6124f344880-01",
-  NLT: "99f64e33d9db4d20-01",
-  CSB: "bba9f40183526463-01",
-  KJV: "de4e0c8a90096426-01",
+  KJV: "kjv",
+  ASV: "asv",
+  WEB: "web",
+  BBE: "bbe",
+  YLT: "ylt",
 };
 
-export const DEFAULT_BIBLE_ID = POPULAR_TRANSLATIONS.ESV;
+export const DEFAULT_BIBLE_ID = "kjv";
 
-/* ---------- helpers ---------- */
+// All 66 Protestant books: [id, name, abbreviation, chapterCount]
+const BOOKS_DATA: [string, string, string, number][] = [
+  ["GEN", "Genesis", "Gen", 50],
+  ["EXO", "Exodus", "Exod", 40],
+  ["LEV", "Leviticus", "Lev", 27],
+  ["NUM", "Numbers", "Num", 36],
+  ["DEU", "Deuteronomy", "Deut", 34],
+  ["JOS", "Joshua", "Josh", 24],
+  ["JDG", "Judges", "Judg", 21],
+  ["RUT", "Ruth", "Ruth", 4],
+  ["1SA", "1 Samuel", "1Sam", 31],
+  ["2SA", "2 Samuel", "2Sam", 24],
+  ["1KI", "1 Kings", "1Kgs", 22],
+  ["2KI", "2 Kings", "2Kgs", 25],
+  ["1CH", "1 Chronicles", "1Chr", 29],
+  ["2CH", "2 Chronicles", "2Chr", 36],
+  ["EZR", "Ezra", "Ezra", 10],
+  ["NEH", "Nehemiah", "Neh", 13],
+  ["EST", "Esther", "Esth", 10],
+  ["JOB", "Job", "Job", 42],
+  ["PSA", "Psalms", "Ps", 150],
+  ["PRO", "Proverbs", "Prov", 31],
+  ["ECC", "Ecclesiastes", "Eccl", 12],
+  ["SNG", "Song of Solomon", "Song", 8],
+  ["ISA", "Isaiah", "Isa", 66],
+  ["JER", "Jeremiah", "Jer", 52],
+  ["LAM", "Lamentations", "Lam", 5],
+  ["EZK", "Ezekiel", "Ezek", 48],
+  ["DAN", "Daniel", "Dan", 12],
+  ["HOS", "Hosea", "Hos", 14],
+  ["JOL", "Joel", "Joel", 3],
+  ["AMO", "Amos", "Amos", 9],
+  ["OBA", "Obadiah", "Obad", 1],
+  ["JON", "Jonah", "Jonah", 4],
+  ["MIC", "Micah", "Mic", 7],
+  ["NAM", "Nahum", "Nah", 3],
+  ["HAB", "Habakkuk", "Hab", 3],
+  ["ZEP", "Zephaniah", "Zeph", 3],
+  ["HAG", "Haggai", "Hag", 2],
+  ["ZEC", "Zechariah", "Zech", 14],
+  ["MAL", "Malachi", "Mal", 4],
+  ["MAT", "Matthew", "Matt", 28],
+  ["MRK", "Mark", "Mark", 16],
+  ["LUK", "Luke", "Luke", 24],
+  ["JHN", "John", "John", 21],
+  ["ACT", "Acts", "Acts", 28],
+  ["ROM", "Romans", "Rom", 16],
+  ["1CO", "1 Corinthians", "1Cor", 16],
+  ["2CO", "2 Corinthians", "2Cor", 13],
+  ["GAL", "Galatians", "Gal", 6],
+  ["EPH", "Ephesians", "Eph", 6],
+  ["PHP", "Philippians", "Phil", 4],
+  ["COL", "Colossians", "Col", 4],
+  ["1TH", "1 Thessalonians", "1Thess", 5],
+  ["2TH", "2 Thessalonians", "2Thess", 3],
+  ["1TI", "1 Timothy", "1Tim", 6],
+  ["2TI", "2 Timothy", "2Tim", 4],
+  ["TIT", "Titus", "Titus", 3],
+  ["PHM", "Philemon", "Phlm", 1],
+  ["HEB", "Hebrews", "Heb", 13],
+  ["JAS", "James", "Jas", 5],
+  ["1PE", "1 Peter", "1Pet", 5],
+  ["2PE", "2 Peter", "2Pet", 3],
+  ["1JN", "1 John", "1John", 5],
+  ["2JN", "2 John", "2John", 1],
+  ["3JN", "3 John", "3John", 1],
+  ["JUD", "Jude", "Jude", 1],
+  ["REV", "Revelation", "Rev", 22],
+];
 
-async function request<T>(
-  path: string,
-  params?: Record<string, string>,
-): Promise<T> {
-  const url = new URL(`${BIBLE_API_URL}${path}`);
-  if (params) {
-    for (const [k, v] of Object.entries(params)) {
-      if (v !== undefined) url.searchParams.set(k, v);
-    }
-  }
+const BOOK_NAMES: Record<string, string> = Object.fromEntries(
+  BOOKS_DATA.map(([id, name]) => [id, name]),
+);
 
-  if (!BIBLE_API_KEY) {
-    throw new Error("Bible API key is not configured. Set NEXT_PUBLIC_BIBLE_API_KEY.");
-  }
+// Names as accepted by bible-api.com
+const BOOK_API_NAMES: Record<string, string> = {
+  GEN: "genesis", EXO: "exodus", LEV: "leviticus", NUM: "numbers", DEU: "deuteronomy",
+  JOS: "joshua", JDG: "judges", RUT: "ruth", "1SA": "1 samuel", "2SA": "2 samuel",
+  "1KI": "1 kings", "2KI": "2 kings", "1CH": "1 chronicles", "2CH": "2 chronicles",
+  EZR: "ezra", NEH: "nehemiah", EST: "esther", JOB: "job", PSA: "psalms",
+  PRO: "proverbs", ECC: "ecclesiastes", SNG: "song of solomon", ISA: "isaiah",
+  JER: "jeremiah", LAM: "lamentations", EZK: "ezekiel", DAN: "daniel",
+  HOS: "hosea", JOL: "joel", AMO: "amos", OBA: "obadiah", JON: "jonah",
+  MIC: "micah", NAM: "nahum", HAB: "habakkuk", ZEP: "zephaniah", HAG: "haggai",
+  ZEC: "zechariah", MAL: "malachi", MAT: "matthew", MRK: "mark", LUK: "luke",
+  JHN: "john", ACT: "acts", ROM: "romans", "1CO": "1 corinthians", "2CO": "2 corinthians",
+  GAL: "galatians", EPH: "ephesians", PHP: "philippians", COL: "colossians",
+  "1TH": "1 thessalonians", "2TH": "2 thessalonians", "1TI": "1 timothy", "2TI": "2 timothy",
+  TIT: "titus", PHM: "philemon", HEB: "hebrews", JAS: "james", "1PE": "1 peter",
+  "2PE": "2 peter", "1JN": "1 john", "2JN": "2 john", "3JN": "3 john", JUD: "jude",
+  REV: "revelation",
+};
 
-  const res = await fetch(url.toString(), {
-    headers: {
-      "api-key": BIBLE_API_KEY,
-    },
-    next: { revalidate: 86400 },
-  });
+const ALL_BOOKS: BibleBook[] = BOOKS_DATA.map(([id, name, abbreviation, numChapters]) => ({
+  id,
+  name,
+  abbreviation,
+  chapters: Array.from({ length: numChapters }, (_, i) => `${id}.${i + 1}`),
+}));
 
-  if (!res.ok) {
-    throw new Error(
-      `Bible API error ${res.status}: ${res.statusText}`,
-    );
-  }
+/* ---------- Fallback daily verses (used when Supabase has no entry) ---------- */
 
-  return res.json() as Promise<T>;
+const FALLBACK_DAILY_VERSES = [
+  { reference: "John 3:16", text: "For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life.", translation: "KJV" },
+  { reference: "Psalm 23:1", text: "The Lord is my shepherd; I shall not want.", translation: "KJV" },
+  { reference: "Proverbs 3:5-6", text: "Trust in the Lord with all your heart and lean not on your own understanding; in all your ways submit to him, and he will make your paths straight.", translation: "KJV" },
+  { reference: "Romans 8:28", text: "And we know that in all things God works for the good of those who love him, who have been called according to his purpose.", translation: "KJV" },
+  { reference: "Philippians 4:13", text: "I can do all this through him who gives me strength.", translation: "KJV" },
+  { reference: "Jeremiah 29:11", text: "For I know the plans I have for you, declares the Lord, plans to prosper you and not to harm you, plans to give you hope and a future.", translation: "KJV" },
+  { reference: "Isaiah 40:31", text: "But those who hope in the Lord will renew their strength. They will soar on wings like eagles; they will run and not grow weary, they will walk and not be faint.", translation: "KJV" },
+  { reference: "Psalm 46:10", text: "Be still, and know that I am God; I will be exalted among the nations, I will be exalted in the earth.", translation: "KJV" },
+  { reference: "Matthew 11:28", text: "Come to me, all you who are weary and burdened, and I will give you rest.", translation: "KJV" },
+  { reference: "Romans 12:2", text: "Do not conform to the pattern of this world, but be transformed by the renewing of your mind.", translation: "KJV" },
+  { reference: "Psalm 119:105", text: "Your word is a lamp for my feet, a light on my path.", translation: "KJV" },
+  { reference: "2 Timothy 3:16-17", text: "All Scripture is God-breathed and is useful for teaching, rebuking, correcting and training in righteousness, so that the servant of God may be thoroughly equipped for every good work.", translation: "KJV" },
+  { reference: "Psalm 34:18", text: "The Lord is close to the brokenhearted and saves those who are crushed in spirit.", translation: "KJV" },
+  { reference: "Philippians 4:6-7", text: "Do not be anxious about anything, but in every situation, by prayer and petition, with thanksgiving, present your requests to God. And the peace of God, which transcends all understanding, will guard your hearts.", translation: "KJV" },
+  { reference: "Joshua 1:9", text: "Have I not commanded you? Be strong and courageous. Do not be afraid; do not be discouraged, for the Lord your God will be with you wherever you go.", translation: "KJV" },
+  { reference: "2 Corinthians 5:17", text: "Therefore, if anyone is in Christ, the new creation has come: the old has gone, the new is here!", translation: "KJV" },
+  { reference: "Ephesians 2:8-9", text: "For it is by grace you have been saved, through faith — and this is not from yourselves, it is the gift of God — not by works, so that no one can boast.", translation: "KJV" },
+  { reference: "Hebrews 11:1", text: "Now faith is confidence in what we hope for and assurance about what we do not see.", translation: "KJV" },
+  { reference: "1 Corinthians 13:4", text: "Love is patient, love is kind. It does not envy, it does not boast, it is not proud.", translation: "KJV" },
+  { reference: "Psalm 139:14", text: "I praise you because I am fearfully and wonderfully made; your works are wonderful, I know that full well.", translation: "KJV" },
+  { reference: "Galatians 5:22-23", text: "But the fruit of the Spirit is love, joy, peace, forbearance, kindness, goodness, faithfulness, gentleness and self-control.", translation: "KJV" },
+  { reference: "James 1:17", text: "Every good and perfect gift is from above, coming down from the Father of the heavenly lights, who does not change like shifting shadows.", translation: "KJV" },
+  { reference: "Lamentations 3:22-23", text: "Because of the Lord's great love we are not consumed, for his compassions never fail. They are new every morning; great is your faithfulness.", translation: "KJV" },
+  { reference: "Colossians 3:23", text: "Whatever you do, work at it with all your heart, as working for the Lord, not for human masters.", translation: "KJV" },
+  { reference: "1 John 4:19", text: "We love because he first loved us.", translation: "KJV" },
+  { reference: "Psalm 27:1", text: "The Lord is my light and my salvation — whom shall I fear? The Lord is the stronghold of my life — of whom shall I be afraid?", translation: "KJV" },
+  { reference: "Matthew 6:33", text: "But seek first his kingdom and his righteousness, and all these things will be given to you as well.", translation: "KJV" },
+  { reference: "Romans 5:8", text: "But God demonstrates his own love for us in this: While we were still sinners, Christ died for us.", translation: "KJV" },
+  { reference: "Isaiah 41:10", text: "So do not fear, for I am with you; do not be dismayed, for I am your God. I will strengthen you and help you; I will uphold you with my righteous right hand.", translation: "KJV" },
+  { reference: "Psalm 37:4", text: "Take delight in the Lord, and he will give you the desires of your heart.", translation: "KJV" },
+];
+
+export function getFallbackDailyVerse(): { reference: string; text: string; translation: string } {
+  const start = new Date(new Date().getFullYear(), 0, 0).getTime();
+  const dayOfYear = Math.floor((Date.now() - start) / 86_400_000);
+  return FALLBACK_DAILY_VERSES[dayOfYear % FALLBACK_DAILY_VERSES.length];
 }
 
-/* ---------- parsing helpers ---------- */
+/* ---------- Parsing helpers ---------- */
 
-/**
- * Parse a chapterId like "GEN.1" into its parts and build a reference.
- */
-export function parseChapterId(chapterId: string): {
-  bookId: string;
-  chapter: number;
-} {
+export function parseChapterId(chapterId: string): { bookId: string; chapter: number } {
   const [bookId, chapterStr] = chapterId.split(".");
   return { bookId, chapter: parseInt(chapterStr, 10) };
 }
 
-/**
- * Build a human-readable verse reference string.
- */
-export function buildVerseReference(
-  bookName: string,
-  chapter: number,
-  verse: string,
-): string {
+export function buildVerseReference(bookName: string, chapter: number, verse: string): string {
   return `${bookName} ${chapter}:${verse}`;
 }
-
-/**
- * Map book abbreviations to full names for reference display.
- */
-const BOOK_NAMES: Record<string, string> = {
-  GEN: "Genesis",
-  EXO: "Exodus",
-  LEV: "Leviticus",
-  NUM: "Numbers",
-  DEU: "Deuteronomy",
-  JOS: "Joshua",
-  JDG: "Judges",
-  RUT: "Ruth",
-  "1SA": "1 Samuel",
-  "2SA": "2 Samuel",
-  "1KI": "1 Kings",
-  "2KI": "2 Kings",
-  "1CH": "1 Chronicles",
-  "2CH": "2 Chronicles",
-  EZR: "Ezra",
-  NEH: "Nehemiah",
-  EST: "Esther",
-  JOB: "Job",
-  PSA: "Psalms",
-  PRO: "Proverbs",
-  ECC: "Ecclesiastes",
-  SNG: "Song of Songs",
-  ISA: "Isaiah",
-  JER: "Jeremiah",
-  LAM: "Lamentations",
-  EZK: "Ezekiel",
-  DAN: "Daniel",
-  HOS: "Hosea",
-  JOL: "Joel",
-  AMO: "Amos",
-  OBA: "Obadiah",
-  JON: "Jonah",
-  MIC: "Micah",
-  NAM: "Nahum",
-  HAB: "Habakkuk",
-  ZEP: "Zephaniah",
-  HAG: "Haggai",
-  ZEC: "Zechariah",
-  MAL: "Malachi",
-  MAT: "Matthew",
-  MRK: "Mark",
-  LUK: "Luke",
-  JHN: "John",
-  ACT: "Acts",
-  ROM: "Romans",
-  "1CO": "1 Corinthians",
-  "2CO": "2 Corinthians",
-  GAL: "Galatians",
-  EPH: "Ephesians",
-  PHP: "Philippians",
-  COL: "Colossians",
-  "1TH": "1 Thessalonians",
-  "2TH": "2 Thessalonians",
-  "1TI": "1 Timothy",
-  "2TI": "2 Timothy",
-  TIT: "Titus",
-  PHM: "Philemon",
-  HEB: "Hebrews",
-  JAS: "James",
-  "1PE": "1 Peter",
-  "2PE": "2 Peter",
-  "1JN": "1 John",
-  "2JN": "2 John",
-  "3JN": "3 John",
-  JUD: "Jude",
-  REV: "Revelation",
-};
 
 export function getBookName(bookId: string): string {
   return BOOK_NAMES[bookId] || bookId;
@@ -182,132 +198,76 @@ export function getBookName(bookId: string): string {
 /* ---------- API functions ---------- */
 
 export async function getBibles(): Promise<BibleTranslation[]> {
-  const json = await request<{ data: BibleTranslation[] }>("/v1/bibles");
-  return (json as { data: BibleTranslation[] }).data;
+  return [
+    { id: "kjv", name: "King James Version", abbreviation: "KJV" },
+    { id: "asv", name: "American Standard Version", abbreviation: "ASV" },
+    { id: "web", name: "World English Bible", abbreviation: "WEB" },
+    { id: "bbe", name: "Bible in Basic English", abbreviation: "BBE" },
+    { id: "ylt", name: "Young's Literal Translation", abbreviation: "YLT" },
+  ];
 }
 
-export async function getBibleBooks(
-  bibleId: string,
-): Promise<BibleBook[]> {
-  const json = await request<{ data: BibleBook[] }>(
-    `/v1/bibles/${bibleId}/books`,
-  );
-  return (json as { data: BibleBook[] }).data;
+export async function getBibleBooks(_bibleId: string): Promise<BibleBook[]> {
+  return ALL_BOOKS;
 }
 
 export async function getChapterVerses(
   bibleId: string,
   chapterId: string,
 ): Promise<BibleVerse[]> {
-  const json = await request<{ data: { content: string; meta?: { fums?: string } } }>(
-    `/v1/bibles/${bibleId}/chapters/${chapterId}`,
-    {
-      "content-type": "text",
-      "include-notes": "false",
-      "include-titles": "true",
-      "include-chapter-numbers": "true",
-      "include-verse-numbers": "true",
-    },
-  );
+  const { bookId, chapter } = parseChapterId(chapterId);
+  const bookApiName = BOOK_API_NAMES[bookId];
+  if (!bookApiName) throw new Error(`Unknown book ID: ${bookId}`);
 
-  const content = (json as { data: { content: string } }).data.content;
-  return parseHtmlVerses(content, chapterId);
-}
+  const ref = `${bookApiName} ${chapter}`;
+  const url = `${BIBLE_API_BASE}/${encodeURIComponent(ref)}?translation=${bibleId}`;
 
-/**
- * Strip HTML tags from API response text while preserving verse structure.
- * The API returns HTML with class="verse" divs, sup.verse-number, etc.
- */
-function parseHtmlVerses(html: string, chapterId: string): BibleVerse[] {
-  const { bookId } = parseChapterId(chapterId);
-  const bookName = getBookName(bookId);
-
-  const verses: BibleVerse[] = [];
-
-  // Match verse blocks: <span class="verse" data-id="GEN.1.1">...</span>
-  const verseRegex =
-    /<span[^>]*class="verse"[^>]*data-id="([^"]+)"[^>]*>([\s\S]*?)<\/span>/g;
-  let match;
-
-  while ((match = verseRegex.exec(html)) !== null) {
-    const verseId = match[1];
-    const verseHtml = match[2];
-
-    // Extract verse number from data-id or sup tag
-    const parts = verseId.split(".");
-    const verseNum = parts.length >= 3 ? parts[parts.length - 1] : "";
-
-    // Strip all HTML tags to get plain text
-    const text = verseHtml
-      .replace(/<sup[^>]*>.*?<\/sup>/gi, "") // remove verse number sup
-      .replace(/<span[^>]*class="[^"]*chapternum[^"]*"[^>]*>.*?<\/span>/gi, "")
-      .replace(/<[^>]+>/g, "") // strip all remaining tags
-      .replace(/\s+/g, " ")
-      .trim();
-
-    if (text) {
-      verses.push({
-        verse: verseNum,
-        text,
-        reference: buildVerseReference(bookName, parseInt(parts[1], 10), verseNum),
-      });
-    }
+  const res = await fetch(url, { next: { revalidate: 86400 } });
+  if (!res.ok) {
+    throw new Error(`Bible API error ${res.status}: ${res.statusText}`);
   }
 
-  // Fallback: if no verse spans found, try paragraph-based parsing
-  if (verses.length === 0) {
-    const pRegex = /<p[^>]*>([\s\S]*?)<\/p>/g;
-    let pMatch;
-    let verseCounter = 1;
-
-    while ((pMatch = pRegex.exec(html)) !== null) {
-      const pHtml = pMatch[1];
-      const text = pHtml
-        .replace(/<sup[^>]*>.*?<\/sup>/gi, "")
-        .replace(/<[^>]+>/g, "")
-        .replace(/\s+/g, " ")
-        .trim();
-
-      if (text) {
-        verses.push({
-          verse: String(verseCounter),
-          text,
-          reference: buildVerseReference(bookName, 1, String(verseCounter)),
-        });
-        verseCounter++;
-      }
-    }
-  }
-
-  return verses;
-}
-
-export async function searchBible(
-  bibleId: string,
-  query: string,
-): Promise<SearchResult> {
-  const json = request<{ data: { verses: Array<{ text: string; reference: string; verseId?: string }>; pagination?: { total: number } } }>(
-    `/v1/bibles/${bibleId}/search`,
-    {
-      query,
-      limit: "20",
-    },
-  );
-
-  const data = (await json).data;
-
-  const verses: BibleVerse[] = (data.verses || []).map((v) => {
-    const parts = v.reference.split(":");
-    const verseNum = parts.length > 1 ? parts[parts.length - 1] : "";
-    return {
-      verse: verseNum,
-      text: v.text.replace(/<[^>]+>/g, "").trim(),
-      reference: v.reference,
-    };
-  });
-
-  return {
-    verses,
-    total: data.pagination?.total ?? verses.length,
+  const data = (await res.json()) as {
+    error?: string;
+    translation_name?: string;
+    verses?: { verse: number; text: string; book_name?: string }[];
   };
+
+  if (data.error) throw new Error(data.error);
+
+  const bookName = BOOK_NAMES[bookId] || bookId;
+
+  return (data.verses || []).map((v) => ({
+    verse: String(v.verse),
+    text: v.text.replace(/^\s*\d+\s+/, "").trim(),
+    reference: buildVerseReference(bookName, chapter, String(v.verse)),
+    translation: data.translation_name || bibleId.toUpperCase(),
+  }));
+}
+
+export async function searchBible(bibleId: string, query: string): Promise<SearchResult> {
+  try {
+    const url = `${BIBLE_API_BASE}/${encodeURIComponent(query)}?translation=${bibleId}`;
+    const res = await fetch(url);
+    if (!res.ok) return { verses: [], total: 0 };
+
+    const data = (await res.json()) as {
+      error?: string;
+      translation_name?: string;
+      verses?: { verse: number; text: string; book_name?: string; chapter?: number }[];
+    };
+
+    if (data.error) return { verses: [], total: 0 };
+
+    const verses: BibleVerse[] = (data.verses || []).map((v) => ({
+      verse: String(v.verse),
+      text: v.text.replace(/^\s*\d+\s+/, "").trim(),
+      reference: `${v.book_name || ""} ${v.chapter || ""}:${v.verse}`.trim(),
+      translation: data.translation_name,
+    }));
+
+    return { verses, total: verses.length };
+  } catch {
+    return { verses: [], total: 0 };
+  }
 }

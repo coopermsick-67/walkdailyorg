@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { BibleVerse, BibleBook, BibleTranslation, DEFAULT_BIBLE_ID, getChapterVerses, getBibles, getBibleBooks, searchBible } from "./bible-api";
+import { BibleVerse, BibleBook, BibleTranslation, DEFAULT_BIBLE_ID, getChapterVerses, getBibles, getBibleBooks, searchBible, getFallbackDailyVerse } from "./bible-api";
 import { cacheChapter, getCachedChapter, cacheBookmark, removeCachedBookmark, cacheHighlight, removeCachedHighlight, getCachedBookmarks, getCachedHighlights, cacheDailyVerse, getCachedDailyVerse } from "./offline-cache";
 import type { CachedBookmark, CachedHighlight, CachedDailyVerse } from "./offline-cache";
 
@@ -380,14 +380,34 @@ export const useBibleStore = create<BibleState>((set, get) => ({
           date: data.date,
           reference: data.reference,
           text: data.verse_text,
-          translation: data.translation || "ESV",
+          translation: data.translation || "KJV",
           cachedAt: Date.now(),
         };
         await cacheDailyVerse(verse);
         set({ dailyVerse: verse });
+      } else {
+        const fallback = getFallbackDailyVerse();
+        set({
+          dailyVerse: {
+            date: today,
+            reference: fallback.reference,
+            text: fallback.text,
+            translation: fallback.translation,
+            cachedAt: Date.now(),
+          },
+        });
       }
     } catch {
-      // daily_verses table might not have an entry for today; that's okay
+      const fallback = getFallbackDailyVerse();
+      set({
+        dailyVerse: {
+          date: today,
+          reference: fallback.reference,
+          text: fallback.text,
+          translation: fallback.translation,
+          cachedAt: Date.now(),
+        },
+      });
     }
   },
 

@@ -177,7 +177,24 @@ export default function StreakBadge({ streak, previousStreak, onMilestoneReached
     }
   }, [streak, previousStreak, onMilestoneReached, celebratedIds]);
 
-  if (streak === 0) return null;
+  if (streak === 0) {
+    return (
+      <div
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl"
+        style={{
+          background: "var(--surface-elevated)",
+          border: "1px solid var(--border)",
+        }}
+        role="status"
+        aria-label="Start your streak today"
+      >
+        <Flame size={22} style={{ color: "var(--text-muted)" }} />
+        <span className="text-sm font-medium" style={{ color: "var(--text-muted)" }}>
+          Start your streak today
+        </span>
+      </div>
+    );
+  }
 
   return (
     <>
