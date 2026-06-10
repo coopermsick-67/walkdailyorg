@@ -10,7 +10,10 @@ export default function MainError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("Main section error boundary caught:", error);
+    if (process.env.NODE_ENV !== "production") {
+      // eslint-disable-next-line no-console
+      console.error("Main section error boundary caught:", error);
+    }
   }, [error]);
 
   return (

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { Trophy, Rocket, Star, Zap, Shield } from "lucide-react";
 import type { OnboardingData } from "./FaithQuestionsStep";
 
 /* ------------------------------------------------------------------ */
@@ -67,6 +68,7 @@ export default function FinalStep({ data }: FinalStepProps) {
   const [error, setError] = useState<string | null>(null);
   const [showContent, setShowContent] = useState(false);
   const [showVerse, setShowVerse] = useState(false);
+  const [showAchievements, setShowAchievements] = useState(false);
   const [showButton, setShowButton] = useState(false);
 
   const verse = getTodaysVerse();
@@ -75,11 +77,13 @@ export default function FinalStep({ data }: FinalStepProps) {
   useEffect(() => {
     const t1 = setTimeout(() => setShowContent(true), 300);
     const t2 = setTimeout(() => setShowVerse(true), 800);
-    const t3 = setTimeout(() => setShowButton(true), 1400);
+    const t3 = setTimeout(() => setShowAchievements(true), 1200);
+    const t4 = setTimeout(() => setShowButton(true), 2000);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
       clearTimeout(t3);
+      clearTimeout(t4);
     };
   }, []);
 
@@ -117,7 +121,10 @@ export default function FinalStep({ data }: FinalStepProps) {
         .eq("id", user.id);
 
       if (updateError) {
-        console.error("Onboarding save error:", updateError);
+        if (process.env.NODE_ENV !== "production") {
+          // eslint-disable-next-line no-console
+          console.error("Onboarding save error:", updateError);
+        }
         setError("Something went wrong. Please try again.");
         setSaving(false);
         return;
@@ -225,7 +232,7 @@ export default function FinalStep({ data }: FinalStepProps) {
           maxWidth: "360px",
         }}
       >
-        Your home in God&apos;s Word is ready.
+        Your Journey Begins Now!
       </h1>
 
       <p
@@ -283,6 +290,66 @@ export default function FinalStep({ data }: FinalStepProps) {
           {verse.reference}
         </p>
       </div>
+
+      {/* Achievement badges */}
+      {showAchievements && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            gap: "12px",
+            marginBottom: "28px",
+            opacity: showAchievements ? 1 : 0,
+            transform: showAchievements ? "translateY(0)" : "translateY(16px)",
+            transition: "all 0.6s ease-out",
+            position: "relative",
+            zIndex: 1,
+          }}
+        >
+          {[
+            { icon: <Shield size={18} />, label: "Faith Profile", color: "#678bd6" },
+            { icon: <Star size={18} />, label: "AI Study Buddy", color: "#c9a227" },
+            { icon: <Zap size={18} />, label: "Prayer Warrior", color: "#16a34a" },
+          ].map((badge, i) => (
+            <div
+              key={i}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "6px",
+                animation: `milestone-reveal 0.4s ${i * 0.15}s ease-out both`,
+              }}
+            >
+              <div
+                style={{
+                  width: "44px",
+                  height: "44px",
+                  borderRadius: "12px",
+                  background: `${badge.color}20`,
+                  border: `1px solid ${badge.color}40`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: badge.color,
+                }}
+              >
+                {badge.icon}
+              </div>
+              <span
+                style={{
+                  fontSize: "10px",
+                  color: "rgba(255,255,255,0.5)",
+                  fontWeight: 600,
+                  textAlign: "center",
+                }}
+              >
+                {badge.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Error */}
       {error && (
@@ -355,20 +422,8 @@ export default function FinalStep({ data }: FinalStepProps) {
           </>
         ) : (
           <>
-            Open Walk Daily
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M5 12h14" />
-              <path d="m12 5 7 7-7 7" />
-            </svg>
+            Launch My Journey
+            <Rocket size={18} />
           </>
         )}
       </button>
@@ -388,6 +443,16 @@ export default function FinalStep({ data }: FinalStepProps) {
           100% {
             transform: translateY(-100vh) translateX(20px) scale(0.3);
             opacity: 0;
+          }
+        }
+        @keyframes milestone-reveal {
+          from {
+            opacity: 0;
+            transform: scale(0.7);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
           }
         }
       `}</style>

@@ -51,6 +51,23 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
+  // Redirect authenticated users to onboarding if they haven't completed it (Issue 45)
+  if (session && !isPublicRoute && url.pathname !== "/onboarding") {
+    try {
+      const { data: profile } = await supabaseClient
+        .from("profiles")
+        .select("has_completed_onboarding")
+        .eq("id", session.user.id)
+        .single();
+
+      if (profile && !profile.has_completed_onboarding) {
+        return NextResponse.redirect(new URL("/onboarding", request.url));
+      }
+    } catch {
+      // If we can't check, allow through to avoid blocking users
+    }
+  }
+
   return response;
 }
 
@@ -72,4 +89,5 @@ const PUBLIC_ROUTES: string[] = [
   "/next.svg",
   "/vercel.svg",
   "/window.svg",
+  "/onboarding",
 ];

@@ -10,7 +10,10 @@ export default function AuthError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("Auth error boundary caught:", error);
+    if (process.env.NODE_ENV !== "production") {
+      // eslint-disable-next-line no-console
+      console.error("Auth error boundary caught:", error);
+    }
   }, [error]);
 
   return (

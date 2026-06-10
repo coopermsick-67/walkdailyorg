@@ -10,7 +10,10 @@ export default function RootError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("Root error boundary caught:", error);
+    if (process.env.NODE_ENV !== "production") {
+      // eslint-disable-next-line no-console
+      console.error("Root error boundary caught:", error);
+    }
   }, [error]);
 
   return (

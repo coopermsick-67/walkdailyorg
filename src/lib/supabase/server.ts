@@ -57,7 +57,7 @@ export async function createAuthenticatedClient() {
   } = await client.auth.getUser();
 
   if (error || !user) {
-    throw new Error("UNAUTHORIZED");
+    throw new Error("Please sign in to continue.");
   }
 
   return client;

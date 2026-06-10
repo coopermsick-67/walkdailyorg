@@ -55,6 +55,46 @@ const PAGE_SIZE = 20;
 const PRAYED_KEY = "walkdaily_prayed";
 const PRAY_DEBOUNCE_SECONDS = 5; // 5-second cooldown per prayer (Issue 29)
 const PRAY_TIMER_SECONDS = 30;
+const PRAYER_STREAK_KEY = "walkdaily_prayer_streak";
+const SENSITIVE_KEYWORDS = ["suicide", "self-harm", "abuse", "addiction", "overdose", "cancer", "terminal", "miscarriage", "stillborn", "divorce", "domestic violence", "rape", "assault", "kill myself", "end my life", "want to die"];
+
+function isSensitiveContent(text: string): boolean {
+  const lower = text.toLowerCase();
+  return SENSITIVE_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
+function getPrayerStreak(): { streak: number; lastDate: string | null } {
+  try {
+    const raw = localStorage.getItem(PRAYER_STREAK_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return { streak: 0, lastDate: null };
+}
+
+function incrementPrayerStreak(): { streak: number; celebrated: boolean } {
+  const today = new Date().toISOString().split("T")[0];
+  const { streak, lastDate } = getPrayerStreak();
+
+  if (lastDate === today) return { streak, celebrated: false };
+
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split("T")[0];
+
+  let newStreak: number;
+  if (lastDate === yesterdayStr) {
+    newStreak = streak + 1;
+  } else {
+    newStreak = 1;
+  }
+
+  try {
+    localStorage.setItem(PRAYER_STREAK_KEY, JSON.stringify({ streak: newStreak, lastDate: today }));
+  } catch { /* ignore */ }
+
+  const celebrated = newStreak === 7 || newStreak === 30 || newStreak === 100;
+  return { streak: newStreak, celebrated };
+}
 
 function getPrayedSet(): Set<string> {
   try {
@@ -106,6 +146,7 @@ export default function PrayerWallPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(0);
+  const [visibleCount, setVisibleCount] = useState(20);
   // Time-based pray debounce (Issue 29): prayer ID -> timestamp last prayed
   const prayedTimestampsRef = useRef<Map<string, number>>(new Map());
   const [, forceUpdate] = useState(0);
@@ -132,6 +173,14 @@ export default function PrayerWallPage() {
 
   // Mini prayer timer state: prayer ID being timer-prayed, and countdown
   const [timerPrayerId, setTimerPrayerId] = useState<string | null>(null);
+
+  // Prayer streak celebration
+  const [showStreakCelebration, setShowStreakCelebration] = useState(false);
+  const [streakCelebrationData, setStreakCelebrationData] = useState<{ streak: number } | null>(null);
+
+  // Content warning filter
+  const [showSensitiveContent, setShowSensitiveContent] = useState(true);
+  const [sensitiveContentWarning, setSensitiveContentWarning] = useState(true);
 
   /* ---- We only clean up on unmount, NOT on every render ---- */
   const pendingSetRef = useRef<Set<string>>(new Set());
@@ -326,6 +375,7 @@ export default function PrayerWallPage() {
       setPage(0);
       setHasMore(true);
       setPrayers([]);
+      setVisibleCount(20);
       setLoading(true);
       fetchPrayers(0, false).then(() => success("Refreshed"));
     }
@@ -348,6 +398,9 @@ export default function PrayerWallPage() {
         setPosting(false);
         return;
       }
+
+      const fullText = `${postTitle.trim()} ${postContent.trim()}`;
+      const hasSensitive = isSensitiveContent(fullText);
 
       const { error } = await client.from("prayer_requests").insert({
         user_id: user.id,
@@ -417,6 +470,13 @@ export default function PrayerWallPage() {
             .update({ pray_count: p.pray_count + 1 })
             .eq("id", prayerId);
         }
+      }
+
+      // Track prayer streak
+      const { streak: newStreak, celebrated } = incrementPrayerStreak();
+      if (celebrated) {
+        setStreakCelebrationData({ streak: newStreak });
+        setShowStreakCelebration(true);
       }
 
       success(`You prayed for ${authorName} 🙏`);
@@ -566,23 +626,81 @@ export default function PrayerWallPage() {
         </div>
       </div>
 
-      {/* Community Guidelines (Issue 35) */}
+      {/* Prayer streak celebration overlay */}
+      {showStreakCelebration && streakCelebrationData && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}
+          onClick={() => setShowStreakCelebration(false)}
+          role="dialog"
+          aria-label={`${streakCelebrationData.streak} day prayer streak!`}
+          aria-modal="true"
+        >
+          {Array.from({ length: 30 }).map((_, i) => (
+            <div
+              key={i}
+              className="confetti-piece"
+              style={{
+                left: `${(i * 3.33) % 100}%`,
+                background: ["#c9a227", "#1a3a6e", "#ffffff", "#d4b43a"][i % 4],
+                width: 6 + (i % 3) * 2,
+                height: 6 + (i % 3) * 2,
+                animationDelay: `${(i * 0.05) % 0.4}s`,
+                borderRadius: i % 2 === 0 ? "50%" : "2px",
+              }}
+            />
+          ))}
+          <div className="relative z-10 flex flex-col items-center animate-fade-in-up" style={{ padding: "2rem", maxWidth: 340 }}>
+            <div
+              className="w-20 h-20 rounded-full flex items-center justify-center mb-4"
+              style={{
+                background: "linear-gradient(135deg, #c9a227, #fde68a)",
+                boxShadow: "0 0 40px rgba(201,162,39,0.5)",
+                animation: "milestone-reveal 0.6s ease-out",
+              }}
+            >
+              <span style={{ fontSize: 36 }}>🙏</span>
+            </div>
+            <p className="text-white/50 text-sm uppercase tracking-widest font-medium mb-2">Prayer Streak!</p>
+            <h2 className="text-white text-2xl font-bold font-heading mb-2">{streakCelebrationData.streak} Days Strong!</h2>
+            <p className="text-white/70 text-sm text-center mb-6">
+              {streakCelebrationData.streak === 7
+                ? "A full week of faithful prayer! God honors your dedication."
+                : streakCelebrationData.streak === 30
+                  ? "A month of faithful prayer! Your prayer life is flourishing."
+                  : "A century of faithful prayer! You are extraordinary!"}
+            </p>
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowStreakCelebration(false); }}
+              className="px-8 py-3 rounded-2xl font-semibold text-sm"
+              style={{ background: "#c9a227", color: "#1a1a2e", minHeight: 48 }}
+            >
+              Amen!
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Community Guidelines banner with "Be kind" emphasis */}
       <div
         className="rounded-2xl p-4 mb-4"
         style={{
-          background: "rgba(201, 162, 39, 0.06)",
+          background: "linear-gradient(135deg, rgba(201,162,39,0.06), rgba(139,92,246,0.04))",
           border: "1px solid rgba(201, 162, 39, 0.15)",
         }}
       >
-        <p
-          className="text-xs font-semibold uppercase tracking-wider mb-2"
-          style={{ color: "var(--color-accent-500)" }}
-        >
-          Community Guidelines
-        </p>
+        <div className="flex items-center gap-2 mb-2">
+          <span style={{ fontSize: 16 }}>💛</span>
+          <p
+            className="text-xs font-bold uppercase tracking-wider"
+            style={{ color: "var(--color-accent-500)" }}
+          >
+            Be kind &mdash; Community Guidelines
+          </p>
+        </div>
         <ul className="space-y-1">
           <li className="text-xs" style={{ color: "var(--text-secondary)" }}>
-            Be respectful and supportive. We are here to lift each other up in Christ.
+            Be respectful, supportive, and encouraging. We are here to lift each other up in Christ.
           </li>
           <li className="text-xs" style={{ color: "var(--text-secondary)" }}>
             Do not share personal information (yours or others) in prayer requests.
@@ -591,9 +709,42 @@ export default function PrayerWallPage() {
             Flag inappropriate content. Posts with 5+ flags are automatically hidden.
           </li>
           <li className="text-xs" style={{ color: "var(--text-secondary)" }}>
-            This is a faith community. Keep posts aligned with Christian values.
+            Use the sensitive content toggle to filter heavy topics like grief or illness.
           </li>
         </ul>
+      </div>
+
+      {/* Content warning toggle */}
+      <div
+        className="rounded-xl p-3 mb-4 flex items-center justify-between"
+        style={{
+          background: "var(--surface-elevated)",
+          border: "1px solid var(--border)",
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-sm">🔞</span>
+          <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+            Show sensitive content (grief, illness, etc.)
+          </span>
+        </div>
+        <button
+          onClick={() => setSensitiveContentWarning(!sensitiveContentWarning)}
+          className="relative w-11 h-6 rounded-full transition-colors duration-200 flex-shrink-0"
+          style={{
+            background: sensitiveContentWarning ? "var(--color-accent-500)" : "var(--border-strong)",
+          }}
+          role="switch"
+          aria-checked={sensitiveContentWarning}
+          aria-label="Toggle sensitive content visibility"
+        >
+          <div
+            className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200"
+            style={{
+              transform: sensitiveContentWarning ? "translateX(22px)" : "translateX(2px)",
+            }}
+          />
+        </button>
       </div>
 
       {/* Prayer list */}
@@ -613,7 +764,10 @@ export default function PrayerWallPage() {
         />
       ) : (
         <div className="space-y-3" ref={listRef}>
-          {prayerList.map((prayer) => (
+          {prayerList
+            .filter((p) => sensitiveContentWarning || !isSensitiveContent(p.title + " " + p.body))
+            .slice(0, visibleCount)
+            .map((prayer) => (
             <PrayerCard
               key={prayer.id}
               prayer={prayer}
@@ -626,8 +780,23 @@ export default function PrayerWallPage() {
               onFlag={handleFlag}
               onDelete={(id) => setDeleteConfirmId(id)}
               currentUserId={currentUserId}
+              showSensitive={showSensitiveContent}
             />
           ))}
+          {prayerList.length > visibleCount && (
+            <button
+              onClick={() => setVisibleCount((prev) => prev + 20)}
+              className="w-full py-3 rounded-2xl text-sm font-semibold transition-colors hover:opacity-80"
+              style={{
+                background: "var(--surface-card)",
+                border: "1px dashed var(--border)",
+                color: "var(--color-primary-500)",
+                minHeight: 44,
+              }}
+            >
+              Load more ({prayerList.length - visibleCount} remaining)
+            </button>
+          )}
         </div>
       )}
 
@@ -694,7 +863,7 @@ export default function PrayerWallPage() {
                 style={{ background: "var(--surface-card)", border: "1px dashed var(--border)" }}
               >
                 <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                  No answered prayers yet. Keep praying — God is faithful!
+                  No answered prayers yet. Keep praying - God is faithful!
                 </p>
               </div>
             ) : (
@@ -1022,6 +1191,7 @@ function PrayerCard({
   onFlag,
   onDelete,
   currentUserId,
+  showSensitive,
 }: {
   prayer: PrayerRequest;
   hasPrayed: boolean;
@@ -1033,8 +1203,11 @@ function PrayerCard({
   onFlag: (id: string) => void;
   onDelete: (id: string) => void;
   currentUserId: string | null;
+  showSensitive: boolean;
 }) {
   const [showMenu, setShowMenu] = useState(false);
+  const [revealedSensitive, setRevealedSensitive] = useState(false);
+  const isSensitive = isSensitiveContent(prayer.title + " " + prayer.body);
   const authorName = prayer.is_anonymous
     ? "Anonymous"
     : prayer.profiles?.[0]?.display_name || "ABrother";
@@ -1143,18 +1316,75 @@ function PrayerCard({
         )}
 
         {/* Content */}
-        <h3
-          className="font-semibold text-base font-heading mb-1"
-          style={{ color: "var(--text-primary)" }}
-        >
-          {prayer.title}
-        </h3>
-        <p
-          className="text-sm leading-relaxed mb-3"
-          style={{ color: "var(--text-secondary)" }}
-        >
-          {preview}
-        </p>
+        <div className="relative">
+          <h3
+            className="font-semibold text-base font-heading mb-1"
+            style={{ color: "var(--text-primary)" }}
+          >
+            {prayer.title}
+            {isSensitive && (
+              <span
+                className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}
+              >
+                Sensitive
+              </span>
+            )}
+          </h3>
+
+          {/* Sensitive content blur overlay */}
+          {isSensitive && !revealedSensitive && showSensitive ? (
+            <div
+              className="relative cursor-pointer"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setRevealedSensitive(true);
+              }}
+            >
+              <p
+                className="text-sm leading-relaxed mb-3 blur-sm select-none"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                {preview}
+              </p>
+              <div
+                className="absolute inset-0 flex items-center justify-center rounded-xl"
+                style={{ background: "rgba(0,0,0,0.05)" }}
+              >
+                <div
+                  className="flex flex-col items-center gap-2 px-4 py-3 rounded-xl"
+                  style={{
+                    background: "var(--surface-card)",
+                    border: "1px solid var(--border)",
+                    boxShadow: "var(--shadow-md)",
+                  }}
+                >
+                  <span className="text-lg">⚠️</span>
+                  <span
+                    className="text-xs font-semibold"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
+                    Sensitive content
+                  </span>
+                  <span
+                    className="text-xs"
+                    style={{ color: "var(--color-accent-500)" }}
+                  >
+                    Tap to read
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p
+              className="text-sm leading-relaxed mb-3"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              {isSensitive && revealedSensitive ? prayer.body : preview}
+            </p>
+          )}
+        </div>
 
         {/* Mini prayer timer */}
         {isTimerActive && (

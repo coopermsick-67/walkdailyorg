@@ -151,6 +151,56 @@ export default function WelcomeStep({ firstName, onNext }: WelcomeStepProps) {
         Let&apos;s set up your personal journey with God&apos;s Word
       </p>
 
+      {/* Power-up preview */}
+      <div
+        style={{
+          display: "flex",
+          gap: "16px",
+          marginBottom: "40px",
+          animation: "fade-in-up 0.8s 0.5s ease-out both",
+          position: "relative",
+          zIndex: 1,
+        }}
+      >
+        {["Faith Profile", "AI Study", "Prayer"].map((label, i) => (
+          <div
+            key={i}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "4px",
+              opacity: 0.4,
+            }}
+          >
+            <div
+              style={{
+                width: "36px",
+                height: "36px",
+                borderRadius: "10px",
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "14px",
+              }}
+            >
+              {["📖", "✨", "🙏"][i]}
+            </div>
+            <span
+              style={{
+                fontSize: "9px",
+                color: "rgba(255,255,255,0.35)",
+                fontWeight: 600,
+              }}
+            >
+              {label}
+            </span>
+          </div>
+        ))}
+      </div>
+
       {/* CTA Button */}
       <button
         onClick={onNext}

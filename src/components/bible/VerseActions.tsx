@@ -9,10 +9,10 @@ import { createClient } from "@/lib/supabase/client";
 import { X, Bookmark, Copy, Share2, PenLine, Sparkles, Save } from "lucide-react";
 
 const HIGHLIGHT_COLORS = [
-  { id: "yellow", bg: "#facc15", label: "Yellow" },
-  { id: "green", bg: "#4ade80", label: "Green" },
-  { id: "pink", bg: "#f472b6", label: "Pink" },
-  { id: "blue", bg: "#60a5fa", label: "Blue" },
+  { id: "yellow", bg: "#fef08a", label: "Yellow" },
+  { id: "green", bg: "#bbf7d0", label: "Green" },
+  { id: "pink", bg: "#fbcfe8", label: "Pink" },
+  { id: "blue", bg: "#bfdbfe", label: "Blue" },
 ];
 
 export default function VerseActions({
@@ -85,7 +85,7 @@ export default function VerseActions({
   }, [verse.reference]);
 
   const copyVerse = async () => {
-    const text = `"${verse.text}" — ${verse.reference} (NIV)`;
+    const text = `"${verse.text}" - ${verse.reference} (NIV)`;
     try {
       await navigator.clipboard.writeText(text);
     } catch {
@@ -100,7 +100,7 @@ export default function VerseActions({
   };
 
   const shareVerse = async () => {
-    const text = `"${verse.text}" — ${verse.reference} (NIV)`;
+    const text = `"${verse.text}" - ${verse.reference} (NIV)`;
     if (navigator.share) {
       try {
         await navigator.share({ text, title: verse.reference });

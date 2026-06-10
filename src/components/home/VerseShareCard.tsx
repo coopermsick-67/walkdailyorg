@@ -13,7 +13,7 @@ export default function VerseShareCard({ reference, text, translation = "NIV" }:
   const [copied, setCopied] = useState(false);
 
   const handleShare = async () => {
-    const shareText = `"${text}" — ${reference} (${translation})`;
+    const shareText = `"${text}" - ${reference} (${translation})`;
 
     if (navigator.share) {
       try {

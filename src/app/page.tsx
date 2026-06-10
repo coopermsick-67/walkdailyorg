@@ -3,6 +3,9 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { BookOpen, MessageCircle, Heart, BookMarked, Brain, Sun } from "lucide-react";
+import { Spotlight } from "@/components/ui/spotlight";
+import { SplineScene } from "@/components/ui/splite";
 
 /* ------------------------------------------------------------------ */
 /*  Feature card data                                                  */
@@ -10,40 +13,40 @@ import { createClient } from "@/lib/supabase/client";
 
 const FEATURES = [
   {
-    icon: "📖",
+    icon: <BookOpen size={24} />,
     title: "Bible Reader",
     description:
-      "Multiple translations, highlights, audio, and reading plans - all in one beautiful reader.",
+      "Multiple translations, highlights, audio, and reading plans - all in one place.",
   },
   {
-    icon: "💬",
+    icon: <MessageCircle size={24} />,
     title: "AI Chat",
     description:
-      "Ask anything about Scripture and get wise, biblically-grounded answers from your AI companion.",
+      "Ask anything about Scripture. Get wise, biblically grounded answers.",
   },
   {
-    icon: "🙏",
+    icon: <Heart size={24} />,
     title: "Prayer Wall",
     description:
-      "Share prayer requests, pray together as a community, and celebrate answered prayers.",
+      "Share prayer requests and pray together. Celebrate answered prayers with your community.",
   },
   {
-    icon: "📓",
+    icon: <BookMarked size={24} />,
     title: "Faith Journal",
     description:
-      "Private journaling with AI-powered spiritual reflection to deepen your walk with God.",
+      "Private journaling with AI-powered reflection. Deepen your walk with God.",
   },
   {
-    icon: "🧠",
+    icon: <Brain size={24} />,
     title: "Verse Memory",
     description:
-      "A spaced repetition system to help you memorize Scripture effectively and permanently.",
+      "A spaced repetition system to help you memorize Scripture for good.",
   },
   {
-    icon: "☀️",
+    icon: <Sun size={24} />,
     title: "Daily Devotional",
     description:
-      "AI-generated devotionals personalized to your faith journey, delivered every morning.",
+      "AI-generated devotionals personalized to your journey. Delivered every morning.",
   },
 ];
 
@@ -57,21 +60,21 @@ const TESTIMONIALS = [
     denomination: "Baptist",
     initials: "SM",
     rating: 5,
-    text: "Walk Daily has transformed my morning quiet time. The AI chat helps me understand difficult passages, and the verse memory system actually works!",
+    text: "Walk Daily has transformed my morning quiet time. The AI chat helps me understand tough passages. The verse memory system actually works!",
   },
   {
     name: "David Chen",
     denomination: "Non-denominational",
     initials: "DC",
     rating: 5,
-    text: "I've tried dozens of Bible apps. Walk Daily is the first one that feels like it was made by people who actually care about spiritual growth.",
+    text: "I've tried dozens of Bible apps. Walk Daily is the first one that feels like real people made it.",
   },
   {
     name: "Maria Santos",
     denomination: "Catholic",
     initials: "MS",
     rating: 5,
-    text: "The prayer wall has connected me with believers around the world. It's beautiful to see God answering prayers in real time through this community.",
+    text: "The prayer wall connected me with believers around the world. It's beautiful to see God answering prayers in real time.",
   },
 ];
 
@@ -235,6 +238,12 @@ export default function LandingPage() {
             "linear-gradient(160deg, var(--color-primary-800) 0%, var(--color-primary-600) 40%, var(--color-primary-700) 100%)",
         }}
       >
+        {/* Spotlight effect */}
+        <Spotlight
+          className="top-0 left-1/2 -translate-x-1/2"
+          fill="rgba(201,162,39,0.15)"
+        />
+
         {/* CSS cross pattern overlay */}
         <div
           className="absolute inset-0 opacity-[0.04]"
@@ -270,7 +279,7 @@ export default function LandingPage() {
           <h1
             className="font-heading text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight mb-6"
           >
-            Walk Daily — Your Free
+            Walk Daily - Your Free
             <br />
             <span style={{ color: "var(--color-accent-500)" }}>
               AI-Powered
@@ -309,9 +318,17 @@ export default function LandingPage() {
             </a>
           </div>
 
+          {/* 3D Spline Scene */}
+          <div className="mt-12 h-[200px] md:h-[280px] w-full max-w-lg mx-auto">
+            <SplineScene
+              scene="https://prod.spline.design/6Wq1Q7YGyM-iab9i/scene.splinecode"
+              className="w-full h-full"
+            />
+          </div>
+
           {/* Verse of the day */}
           <div
-            className="mt-16 max-w-xl mx-auto rounded-2xl px-6 py-5 text-center"
+            className="mt-8 max-w-xl mx-auto rounded-2xl px-6 py-5 text-center"
             style={{
               background: "rgba(255, 255, 255, 0.06)",
               border: "1px solid rgba(255, 255, 255, 0.1)",
@@ -354,8 +371,7 @@ export default function LandingPage() {
               className="mt-4 text-base max-w-xl mx-auto"
               style={{ color: "var(--text-secondary)" }}
             >
-              Six powerful tools designed to help you grow closer to God every
-              day - completely free.
+              Six powerful tools to help you grow closer to God - completely free.
             </p>
           </div>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { JournalEntrySkeleton } from "@/components/ui/Skeletons";
@@ -8,6 +9,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { JournalEditor } from "@/components/journal/JournalEditor";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { streamJournalReflection } from "@/lib/ai/client";
+import { Heart, Smile, Frown, Sprout, Search, Check } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -31,12 +33,12 @@ interface JournalEntry {
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-const MOODS: { value: Mood; label: string; icon: string }[] = [
-  { value: "peaceful", label: "Peaceful", icon: "🙏" },
-  { value: "grateful", label: "Grateful", icon: "😊" },
-  { value: "struggling", label: "Struggling", icon: "😔" },
-  { value: "growing", label: "Growing", icon: "🌱" },
-  { value: "seeking", label: "Seeking", icon: "🔍" },
+const MOODS: { value: Mood; label: string; icon: React.ReactNode }[] = [
+  { value: "peaceful", label: "Peaceful", icon: <Heart size={16} /> },
+  { value: "grateful", label: "Grateful", icon: <Smile size={16} /> },
+  { value: "struggling", label: "Struggling", icon: <Frown size={16} /> },
+  { value: "growing", label: "Growing", icon: <Sprout size={16} /> },
+  { value: "seeking", label: "Seeking", icon: <Search size={16} /> },
 ];
 
 const PAGE_SIZE = 10;
@@ -188,9 +190,8 @@ export default function JournalPage() {
 
         if (error) throw error;
         setEntries((data || []) as JournalEntry[]);
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : "Search failed";
-        toastError(message);
+      } catch {
+        toastError("Search failed. Please try again.");
         setEntries([]);
       }
       setHasMore(false);
@@ -218,7 +219,7 @@ export default function JournalPage() {
       data: { user },
     } = await client.auth.getUser();
     if (!user) {
-      toastError("Please sign in to save journal entries");
+      toastError("Please sign in to save entries.");
       return;
     }
 
@@ -677,13 +678,14 @@ function JournalEntryCard({
         </button>
       )}
 
-      {/* Verse tags */}
+      {/* Verse tags — tappable to navigate to Bible (Issue 41) */}
       {entry.verse_tags && entry.verse_tags.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-2">
           {entry.verse_tags.map((tag, i) => (
-            <span
+            <Link
               key={i}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium"
+              href={`/bible?verse=${encodeURIComponent(tag)}`}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-opacity hover:opacity-80"
               style={{
                 background: "rgba(201, 162, 39, 0.1)",
                 color: "var(--color-accent-500)",
@@ -698,7 +700,7 @@ function JournalEntryCard({
                 <path d="M19,2L19,22L12,19L5,22L5,2L19,2Z" />
               </svg>
               {tag}
-            </span>
+            </Link>
           ))}
         </div>
       )}

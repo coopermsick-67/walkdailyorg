@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { Sprout, BookOpen, Cross, Flame, Library, Heart, Music, Users, PenLine, Clock, HelpCircle, Frown, Globe, Megaphone, BookMarked, Check, Calendar } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -27,28 +28,28 @@ interface FaithQuestionsStepProps {
 /* ------------------------------------------------------------------ */
 
 const FAITH_JOURNEY_OPTIONS = [
-  { value: "exploring", emoji: "🌱", label: "Just starting to explore Christianity" },
-  { value: "new", emoji: "📖", label: "I'm a newer believer (0-3 years)" },
-  { value: "seasoned", emoji: "✝️", label: "I've been a Christian for a while" },
-  { value: "deep", emoji: "🔥", label: "I'm deeply rooted and want to go deeper" },
+  { value: "exploring", icon: <Sprout size={22} />, label: "Just starting to explore Christianity" },
+  { value: "new", icon: <BookOpen size={22} />, label: "I'm a newer believer (0-3 years)" },
+  { value: "seasoned", icon: <Cross size={22} />, label: "I've been a Christian for a while" },
+  { value: "deep", icon: <Flame size={22} />, label: "I'm deeply rooted and want to go deeper" },
 ];
 
 const CONNECTION_OPTIONS = [
-  { value: "scripture", emoji: "📚", label: "Reading Scripture" },
-  { value: "prayer", emoji: "🙏", label: "Prayer and meditation" },
-  { value: "worship", emoji: "🎵", label: "Worship music" },
-  { value: "community", emoji: "👥", label: "Community and fellowship" },
-  { value: "journaling", emoji: "✍️", label: "Journaling and reflection" },
-  { value: "devotionals", emoji: "📿", label: "Structured devotionals" },
+  { value: "scripture", icon: <Library size={24} />, label: "Reading Scripture" },
+  { value: "prayer", icon: <Heart size={24} />, label: "Prayer and meditation" },
+  { value: "worship", icon: <Music size={24} />, label: "Worship music" },
+  { value: "community", icon: <Users size={24} />, label: "Community and fellowship" },
+  { value: "journaling", icon: <PenLine size={24} />, label: "Journaling and reflection" },
+  { value: "devotionals", icon: <BookMarked size={24} />, label: "Structured devotionals" },
 ];
 
 const CHALLENGE_OPTIONS = [
-  { value: "time", emoji: "😓", label: "Finding time consistently" },
-  { value: "understanding", emoji: "🤔", label: "Understanding Scripture" },
-  { value: "hardship", emoji: "💔", label: "Hardship and doubt" },
-  { value: "prayer_life", emoji: "🙏", label: "Developing prayer life" },
-  { value: "applying", emoji: "🌍", label: "Applying faith daily" },
-  { value: "sharing", emoji: "📣", label: "Sharing faith with others" },
+  { value: "time", icon: <Clock size={22} />, label: "Finding time consistently" },
+  { value: "understanding", icon: <HelpCircle size={22} />, label: "Understanding Scripture" },
+  { value: "hardship", icon: <Frown size={22} />, label: "Hardship and doubt" },
+  { value: "prayer_life", icon: <Heart size={22} />, label: "Developing prayer life" },
+  { value: "applying", icon: <Globe size={22} />, label: "Applying faith daily" },
+  { value: "sharing", icon: <Megaphone size={22} />, label: "Sharing faith with others" },
 ];
 
 const TRANSLATION_OPTIONS = [
@@ -298,7 +299,7 @@ export default function FaithQuestionsStep({
                 marginBottom: "28px",
               }}
             >
-              There&apos;s no wrong answer — just where you are right now.
+              There&apos;s no wrong answer - just where you are right now.
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
               {FAITH_JOURNEY_OPTIONS.map((opt) => (
@@ -330,7 +331,7 @@ export default function FaithQuestionsStep({
                   }}
                 >
                   <span style={{ fontSize: "22px", flexShrink: 0 }}>
-                    {opt.emoji}
+                    {opt.icon}
                   </span>
                   <span>{opt.label}</span>
                 </button>
@@ -401,7 +402,7 @@ export default function FaithQuestionsStep({
                         !selected && connectionMethods.length >= 3 ? 0.4 : 1,
                     }}
                   >
-                    <span style={{ fontSize: "24px" }}>{opt.emoji}</span>
+                    <span style={{ fontSize: "24px" }}>{opt.icon}</span>
                     <span style={{ lineHeight: 1.3 }}>{opt.label}</span>
                   </button>
                 );
@@ -477,7 +478,7 @@ export default function FaithQuestionsStep({
                   }}
                 >
                   <span style={{ fontSize: "22px", flexShrink: 0 }}>
-                    {opt.emoji}
+                    {opt.icon}
                   </span>
                   <span>{opt.label}</span>
                 </button>
@@ -559,16 +560,14 @@ export default function FaithQuestionsStep({
                     </div>
                   </div>
                   {bibleTranslation === opt.value && (
-                    <span
+                    <Check
+                      size={18}
                       style={{
                         color: "var(--color-accent-500, #c9a227)",
-                        fontSize: "18px",
                         flexShrink: 0,
                         marginLeft: "12px",
                       }}
-                    >
-                      ✓
-                    </span>
+                    />
                   )}
                 </button>
               ))}
@@ -630,7 +629,7 @@ export default function FaithQuestionsStep({
                       'var(--font-body, "Inter", system-ui, sans-serif)',
                   }}
                 >
-                  <span style={{ fontSize: "22px" }}>📅</span>
+                  <Calendar size={22} />
                   <span>Every day</span>
                 </button>
                 {readingFrequency === "daily" && (
@@ -703,7 +702,7 @@ export default function FaithQuestionsStep({
                       'var(--font-body, "Inter", system-ui, sans-serif)',
                   }}
                 >
-                  <span style={{ fontSize: "22px" }}>📅</span>
+                  <Calendar size={22} />
                   <span>A few times a week</span>
                 </button>
                 {readingFrequency === "weekly" && (
@@ -742,8 +741,8 @@ export default function FaithQuestionsStep({
                             type="button"
                             onClick={() => toggleDay(day.value)}
                             style={{
-                              width: "38px",
-                              height: "38px",
+                              minWidth: "44px",
+                              minHeight: "44px",
                               borderRadius: "10px",
                               border: selected
                                 ? "2px solid var(--color-accent-500, #c9a227)"
@@ -798,7 +797,7 @@ export default function FaithQuestionsStep({
                     'var(--font-body, "Inter", system-ui, sans-serif)',
                 }}
               >
-                <span style={{ fontSize: "22px" }}>📅</span>
+                <Calendar size={22} />
                 <span>Whenever I feel called</span>
               </button>
             </div>

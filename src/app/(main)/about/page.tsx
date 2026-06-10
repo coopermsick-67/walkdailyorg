@@ -1,7 +1,7 @@
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'About — Walk Daily',
+  title: 'About - Walk Daily',
   description: 'Learn about Walk Daily, the free AI-powered Bible companion for daily spiritual growth.',
 }
 

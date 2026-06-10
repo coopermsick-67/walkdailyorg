@@ -1,7 +1,7 @@
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Terms of Service — Walk Daily',
+  title: 'Terms of Service - Walk Daily',
   description: 'Walk Daily terms of service.',
 }
 

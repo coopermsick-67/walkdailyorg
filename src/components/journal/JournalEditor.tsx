@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { Heart, Smile, Frown, Sprout, Search } from "lucide-react";
 
 type Mood = "peaceful" | "grateful" | "struggling" | "growing" | "seeking";
 
@@ -14,10 +15,10 @@ interface JournalEntry {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Bible books for verse tag autocomplete                             */
+/*  Bible books for verse tag autocomplete                              */
 /* ------------------------------------------------------------------ */
 
-const BIBLE_BOOKS = [
+const BIBLE_BOOKS: string[] = [
   "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy",
   "Joshua", "Judges", "Ruth", "1 Samuel", "2 Samuel",
   "1 Kings", "2 Kings", "1 Chronicles", "2 Chronicles",
@@ -35,12 +36,12 @@ const BIBLE_BOOKS = [
   "Jude", "Revelation",
 ];
 
-const MOODS: { value: Mood; label: string; icon: string }[] = [
-  { value: "peaceful", label: "Peaceful", icon: "🙏" },
-  { value: "grateful", label: "Grateful", icon: "😊" },
-  { value: "struggling", label: "Struggling", icon: "😔" },
-  { value: "growing", label: "Growing", icon: "🌱" },
-  { value: "seeking", label: "Seeking", icon: "🔍" },
+const MOODS: { value: Mood; label: string; icon: React.ReactNode }[] = [
+  { value: "peaceful", label: "Peaceful", icon: <Heart size={16} /> },
+  { value: "grateful", label: "Grateful", icon: <Smile size={16} /> },
+  { value: "struggling", label: "Struggling", icon: <Frown size={16} /> },
+  { value: "growing", label: "Growing", icon: <Sprout size={16} /> },
+  { value: "seeking", label: "Seeking", icon: <Search size={16} /> },
 ];
 
 /* ------------------------------------------------------------------ */

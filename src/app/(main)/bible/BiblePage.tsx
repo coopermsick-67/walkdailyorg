@@ -102,6 +102,8 @@ export default function BiblePage() {
   const [readingMode, setReadingMode] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [chapterComplete, setChapterComplete] = useState(false);
+  const [showGenesisCelebration, setShowGenesisCelebration] = useState(false);
+  const genesisCelebrationFiredRef = useRef(false);
 
   // Ref for the reading content area to track scroll
   const readingRef = useRef<HTMLDivElement>(null);
@@ -117,6 +119,20 @@ export default function BiblePage() {
     setChapterComplete(false);
     chapterCompleteFiredRef.current = null;
   }, [currentChapterId]);
+
+  // Genesis 1:1 special celebration (the first verse ever)
+  useEffect(() => {
+    if (
+      currentBook?.name === "Genesis" &&
+      currentChapterId?.endsWith(".1") &&
+      currentChapterVerses.length > 0 &&
+      !genesisCelebrationFiredRef.current
+    ) {
+      genesisCelebrationFiredRef.current = true;
+      setShowGenesisCelebration(true);
+      setTimeout(() => setShowGenesisCelebration(false), 4000);
+    }
+  }, [currentBook, currentChapterId, currentChapterVerses.length]);
 
   // Save reading progress when chapter loads (Issue 11)
   useEffect(() => {
@@ -288,6 +304,58 @@ export default function BiblePage() {
     <div className={`flex-1 flex flex-col max-w-3xl mx-auto w-full ${readingMode ? "reading-mode-body" : ""}`}>
       {/* Confetti overlay */}
       {showConfetti && <ConfettiOverlay />}
+
+      {/* Genesis 1:1 special celebration */}
+      {showGenesisCelebration && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}
+          onClick={() => setShowGenesisCelebration(false)}
+          role="dialog"
+          aria-label="Genesis 1:1 - The beginning!"
+          aria-modal="true"
+        >
+          {Array.from({ length: 40 }).map((_, i) => (
+            <div
+              key={i}
+              className="confetti-piece"
+              style={{
+                left: `${(i * 2.5) % 100}%`,
+                background: ["#c9a227", "#fde68a", "#ffffff", "#1a3a6e", "#678bd6"][i % 5],
+                width: 4 + (i % 4) * 2,
+                height: 4 + (i % 4) * 2,
+                animationDelay: `${(i * 0.03) % 0.5}s`,
+                borderRadius: i % 3 === 0 ? "50%" : "2px",
+              }}
+            />
+          ))}
+          <div className="relative z-10 flex flex-col items-center animate-fade-in-up" style={{ padding: "2rem", maxWidth: 360 }}>
+            <p className="text-white/50 text-sm uppercase tracking-widest font-medium mb-4">The First Verse</p>
+            <div
+              className="w-24 h-24 rounded-full flex items-center justify-center mb-6"
+              style={{
+                background: "linear-gradient(135deg, #c9a227, #fde68a, #c9a227)",
+                boxShadow: "0 0 60px rgba(201,162,39,0.5)",
+                animation: "milestone-reveal 0.6s ease-out",
+              }}
+            >
+              <span style={{ fontSize: 40 }}>✨</span>
+            </div>
+            <h2 className="text-white text-2xl font-bold font-heading mb-2 text-center">Genesis 1:1</h2>
+            <p className="text-white/80 text-base font-heading italic text-center mb-4 leading-relaxed">
+              &ldquo;In the beginning God created the heavens and the earth.&rdquo;
+            </p>
+            <p className="text-white/50 text-sm text-center mb-6">Where it all began. The very first words of Scripture.</p>
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowGenesisCelebration(false); }}
+              className="px-8 py-3 rounded-2xl font-semibold text-sm"
+              style={{ background: "#c9a227", color: "#1a1a2e", minHeight: 48 }}
+            >
+              Continue Reading
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Top bar — hidden in reading mode */}
       {!readingMode && (

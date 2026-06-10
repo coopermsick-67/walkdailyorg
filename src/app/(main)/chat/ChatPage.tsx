@@ -10,7 +10,8 @@ import { streamChat } from "@/lib/ai/client";
 import { useToast } from "@/components/ui/Toast";
 import { ChatMessageSkeleton } from "@/components/ui/Skeletons";
 import type { AIMessage } from "@/types/ai";
-import { Settings, MessageCircle, ChevronDown, BookOpen, Heart, Sparkles, MessageSquare, Brain, Share2, Briefcase } from "lucide-react";
+import { Settings, MessageCircle, ChevronDown, BookOpen, Heart, Sparkles, MessageSquare, Brain, Share2, Briefcase, Flame, Trophy, X } from "lucide-react";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 const PAGE_SIZE = 50;
 
@@ -163,10 +164,37 @@ export default function ChatPage() {
   // Profile state for personalized prompts
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  // AI Chat conversation streak
+  const [chatStreak, setChatStreak] = useState(0);
+  const [showChatStreakCelebration, setShowChatStreakCelebration] = useState(false);
+  const [chatStreakCelebrationMilestone, setChatStreakCelebrationMilestone] = useState(0);
+
+  // AI quota display
+  const [aiQuotaRemaining, setAiQuotaRemaining] = useState<number | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const cancelRef = useRef<(() => void) | null>(null);
   const scrollPositionRef = useRef<{ top: number; height: number } | null>(null);
+
+  /** Fetch AI quota remaining */
+  const loadAIQuota = useCallback(async () => {
+    try {
+      const client = createClient();
+      const { data: { user } } = await client.auth.getUser();
+      if (!user) return;
+      const today = new Date().toISOString().split("T")[0];
+      const { count } = await client
+        .from("ai_usage")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .gte("created_at", `${today}T00:00:00`);
+      setAiQuotaRemaining(50 - (count || 0));
+    } catch {
+      /* silent */
+    }
+  }, []);
 
   /** Fetch user profile for personalized prompts */
   const loadProfile = useCallback(async () => {
@@ -188,6 +216,47 @@ export default function ChatPage() {
     }
     setLoadingProfile(false);
   }, []);
+
+  // Track AI chat conversation streak
+  useEffect(() => {
+    const CHAT_STREAK_KEY = "walkdaily_chat_streak";
+    const today = new Date().toISOString().split("T")[0];
+
+    try {
+      const raw = localStorage.getItem(CHAT_STREAK_KEY);
+      let streak = 0;
+      let lastDate: string | null = null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        streak = parsed.streak || 0;
+        lastDate = parsed.lastDate || null;
+      }
+
+      // Check if user has any chat messages today
+      if (messages.length > 0) {
+        const hasToday = messages.some((m) => m.created_at?.startsWith(today));
+        if (hasToday && lastDate !== today) {
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          const yesterdayStr = yesterday.toISOString().split("T")[0];
+          const newStreak = lastDate === yesterdayStr ? streak + 1 : 1;
+          localStorage.setItem(CHAT_STREAK_KEY, JSON.stringify({ streak: newStreak, lastDate: today }));
+          setChatStreak(newStreak);
+
+          // Celebrate milestones
+          if (newStreak === 3 || newStreak === 7 || newStreak === 30) {
+            setChatStreakCelebrationMilestone(newStreak);
+            setShowChatStreakCelebration(true);
+            setTimeout(() => setShowChatStreakCelebration(false), 3500);
+          }
+        } else if (lastDate === today) {
+          setChatStreak(streak);
+        }
+      }
+    } catch {
+      /* silent */
+    }
+  }, [messages]);
 
   /** Fetch one page of chat messages. When `before` is provided, fetch rows
    *  with created_at < before (older); otherwise fetch the most recent page. */
@@ -234,10 +303,11 @@ export default function ChatPage() {
   useEffect(() => {
     (async () => {
       await loadProfile();
+      await loadAIQuota();
       await fetchPage(null, false);
       setLoadingHistory(false);
     })();
-  }, [fetchPage, loadProfile]);
+  }, [fetchPage, loadProfile, loadAIQuota]);
 
   /** Load older messages (Load More button) */
   const handleLoadMore = useCallback(async () => {
@@ -404,14 +474,75 @@ export default function ChatPage() {
     } else {
       toastError("Failed to clear chat");
     }
+    setShowClearConfirm(false);
   }, [supabase, success, toastError]);
+
+  const handleClearHistoryRequest = useCallback(() => {
+    setShowClearConfirm(true);
+  }, []);
 
   // Determine if we have onboarding data
   const hasOnboardingData = profile?.faith_journey || profile?.spiritual_challenge;
   const personalizedPrompts = hasOnboardingData && profile ? getPersonalizedPrompts(profile) : null;
 
+  // Chat streak celebration messages
+  const getStreakCelebrationMessage = (milestone: number): string => {
+    switch (milestone) {
+      case 3: return "3-day chat streak! You're building a habit! 🙏";
+      case 7: return "7-day chat streak! A full week of faith conversations! 🌟";
+      case 30: return "30-day chat streak! You're devoted to growing! 🔥";
+      default: return `${milestone}-day chat streak! Amazing! 🎉`;
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full">
+      {/* Chat Streak Celebration Overlay */}
+      {showChatStreakCelebration && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)" }}
+          onClick={() => setShowChatStreakCelebration(false)}
+          role="dialog"
+          aria-label="Chat streak celebration!"
+          aria-modal="true"
+        >
+          {Array.from({ length: 20 }).map((_, i) => (
+            <div
+              key={i}
+              className="confetti-piece"
+              style={{
+                left: `${(i * 5 + Math.random() * 5) % 100}%`,
+                background: ["#c9a227", "#1a3a6e", "#ffffff", "#d4b43a", "#678bd6"][i % 5],
+                width: 4 + (i % 3) * 2,
+                height: 4 + (i % 3) * 2,
+                animationDelay: `${(i * 0.05) % 0.5}s`,
+                borderRadius: i % 2 === 0 ? "50%" : "2px",
+              }}
+            />
+          ))}
+          <div
+            className="relative z-10 flex flex-col items-center animate-fade-in-up"
+            style={{ padding: "2rem", maxWidth: 340 }}
+          >
+            <div
+              className="w-20 h-20 rounded-full flex items-center justify-center mb-6"
+              style={{
+                background: "linear-gradient(135deg, #c9a227, #fde68a)",
+                boxShadow: "0 0 40px rgba(201,162,39,0.4)",
+                animation: "milestone-reveal 0.5s ease-out",
+              }}
+            >
+              <Trophy size={36} color="#1a1a2e" />
+            </div>
+            <p className="text-white text-center text-lg font-heading font-bold leading-relaxed">
+              {getStreakCelebrationMessage(chatStreakCelebrationMilestone)}
+            </p>
+            <p className="text-white/40 text-sm mt-4">Tap anywhere to close</p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div
         className="sticky top-0 z-30 px-4 py-3 flex items-center justify-between"
@@ -438,19 +569,44 @@ export default function ChatPage() {
             >
               AI Faith Chat
             </h1>
-            <p
-              className="text-[10px]"
-              style={{ color: "var(--text-muted)" }}
-            >
-              Powered by Scripture
-            </p>
+            <div className="flex items-center gap-2">
+              <p
+                className="text-[10px]"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Powered by Scripture
+              </p>
+              {chatStreak > 0 && (
+                <span
+                  className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                  style={{
+                    background: "rgba(201,162,39,0.12)",
+                    color: "#c9a227",
+                  }}
+                >
+                  <Flame size={10} />
+                  {chatStreak}d
+                </span>
+              )}
+              {aiQuotaRemaining !== null && (
+                <span
+                  className="inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full"
+                  style={{
+                    background: aiQuotaRemaining <= 5 ? "rgba(239,68,68,0.12)" : "rgba(100,100,100,0.1)",
+                    color: aiQuotaRemaining <= 5 ? "#ef4444" : "var(--text-muted)",
+                  }}
+                >
+                  {aiQuotaRemaining}/50 left
+                </span>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <VerseModeToggle enabled={verseMode} onToggle={setVerseMode} />
           {messages.length > 0 && (
             <button
-              onClick={handleClearHistory}
+              onClick={handleClearHistoryRequest}
               className="p-2 rounded-lg transition-colors hover:opacity-70"
               style={{ color: "var(--text-muted)" }}
               aria-label="Clear chat history"
@@ -652,7 +808,7 @@ export default function ChatPage() {
           disabled={isStreaming}
           placeholder={
             verseMode
-              ? "Ask a question — I'll respond with Scripture..."
+              ? "Ask a question - I'll respond with Scripture..."
               : "Ask anything about faith or Scripture..."
           }
         />
@@ -663,6 +819,18 @@ export default function ChatPage() {
           AI responses are generated by language models. Always verify important theological questions against the Bible.
         </p>
       </div>
+
+      {/* Clear history confirmation modal */}
+      <ConfirmModal
+        isOpen={showClearConfirm}
+        title="Clear Chat History"
+        message="Are you sure you want to clear your entire chat history? This action cannot be undone."
+        confirmLabel="Clear"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={handleClearHistory}
+        onCancel={() => setShowClearConfirm(false)}
+      />
     </div>
   );
 }

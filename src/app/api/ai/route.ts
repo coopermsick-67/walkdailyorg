@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAuthenticatedClient } from "@/lib/supabase/server";
+import { buildSystemPrompt } from "@/lib/system-prompt";
 import type { AIRequest, AIStreamPayload } from "@/types/ai";
 
 /* ------------------------------------------------------------------ */
@@ -115,8 +116,9 @@ function buildMessages(
   action: string,
   request: AIRequest,
   userMessages?: { role: string; content: string }[],
+  dynamicSystemPrompt?: string,
 ): { role: string; content: string }[] {
-  const systemPrompt = SYSTEM_PROMPTS[action] || SYSTEM_PROMPTS.chat;
+  const systemPrompt = dynamicSystemPrompt || SYSTEM_PROMPTS[action] || SYSTEM_PROMPTS.chat;
   const msgs: { role: string; content: string }[] = [
     { role: "system", content: systemPrompt },
   ];
@@ -319,7 +321,7 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json(
-        { error: "UNAUTHORIZED" },
+        { error: "Please sign in to use this feature." },
         { status: 401 },
       );
     }
@@ -371,8 +373,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build messages
-    const messages = buildMessages(action, body, clientMessages);
+    // Build messages — use personalized system prompt for chat actions
+    let dynamicPrompt: string | undefined;
+    if (action === "chat") {
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("display_name, faith_journey_stage, denomination, preferred_translation, spiritual_challenges, connection_styles, reading_frequency, reading_time_of_day, bible_reading_history, prayer_style, learning_style, life_stage, interests, accountability_preference, content_depth, age_range")
+          .eq("id", user.id)
+          .single();
+        if (profile) {
+          dynamicPrompt = buildSystemPrompt(profile as any);
+        }
+      } catch {
+        // Fall back to default prompt
+      }
+    }
+    const messages = buildMessages(action, body, clientMessages, dynamicPrompt);
 
     // Select model
     const model = process.env.AI_MODEL_PRIMARY || "nex-agi/nex-n2-pro:free";

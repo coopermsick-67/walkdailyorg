@@ -21,7 +21,7 @@ const PROMPTS: SuggestedPrompt[] = [
     icon: <BookOpen size={18} />,
     label: "Explain John 3:16 in depth",
     action: "chat",
-    topic: "Explain John 3:16 in depth — what does it mean and why is it so important to the Christian faith?",
+    topic: "Explain John 3:16 in depth - what does it mean and why is it so important to the Christian faith?",
   },
   {
     icon: <Heart size={18} />,
@@ -39,13 +39,13 @@ const PROMPTS: SuggestedPrompt[] = [
     icon: <MessageCircle size={18} />,
     label: "Help me understand the Book of Romans",
     action: "study",
-    topic: "Help me understand the Book of Romans — its main themes, key passages, and significance for Christians today.",
+    topic: "Help me understand the Book of Romans - its main themes, key passages, and significance for Christians today.",
   },
   {
     icon: <Brain size={18} />,
     label: "What's the meaning of life according to Ecclesiastes?",
     action: "chat",
-    topic: "What is the meaning of life according to the Book of Ecclesiastes? What lessons can we draw for our daily lives?",
+    topic: "What is the meaning of life according to Ecclesiastes? What lessons can we draw for our daily lives?",
   },
 ];
 

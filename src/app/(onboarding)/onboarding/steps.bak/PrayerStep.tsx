@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { HandHeart } from "lucide-react";
 import type { OnboardingData } from "./FaithQuestionsStep";
 
 /* ------------------------------------------------------------------ */
@@ -21,19 +22,19 @@ type PrayerPhase = "intro" | "phase1" | "phase2" | "phase3" | "complete";
 function getPersonalizedScripture(challenge: string): string {
   switch (challenge) {
     case "time":
-      return '"Be still before the LORD and wait patiently for him." — Psalm 37:7';
+      return '"Be still before the LORD and wait patiently for him." - Psalm 37:7';
     case "understanding":
-      return '"If any of you lacks wisdom, you should ask God, who gives generously to all." — James 1:5';
+      return '"If any of you lacks wisdom, you should ask God, who gives generously to all." - James 1:5';
     case "hardship":
-      return '"Come to me, all you who are weary and burdened, and I will give you rest." — Matthew 11:28';
+      return '"Come to me, all you who are weary and burdened, and I will give you rest." - Matthew 11:28';
     case "prayer_life":
-      return '"Devote yourselves to prayer, being watchful and thankful." — Colossians 4:2';
+      return '"Devote yourselves to prayer, being watchful and thankful." - Colossians 4:2';
     case "applying":
-      return '"Let the word of Christ dwell in you richly." — Colossians 3:16';
+      return '"Let the word of Christ dwell in you richly." - Colossians 3:16';
     case "sharing":
-      return '"For God has not given us a spirit of fear, but of power and of love." — 2 Timothy 1:7';
+      return '"For God has not given us a spirit of fear, but of power and of love." - 2 Timothy 1:7';
     default:
-      return '"The LORD is near to all who call on him." — Psalm 145:18';
+      return '"The LORD is near to all who call on him." - Psalm 145:18';
   }
 }
 
@@ -140,7 +141,7 @@ export default function PrayerStep({ data, onNext }: PrayerStepProps) {
     if (phase === "complete") {
       const timer = setTimeout(() => {
         onNext();
-      }, 4000);
+      }, 3000);
       return () => clearTimeout(timer);
     }
   }, [phase, onNext]);
@@ -202,7 +203,7 @@ export default function PrayerStep({ data, onNext }: PrayerStepProps) {
             animation: "pulse-glow 3s ease-in-out infinite",
           }}
         >
-          <span style={{ fontSize: "28px" }}>🙏</span>
+          <HandHeart size={28} style={{ color: "var(--color-accent-500)" }} />
         </div>
 
         <h2
@@ -394,7 +395,7 @@ export default function PrayerStep({ data, onNext }: PrayerStepProps) {
             marginBottom: "24px",
           }}
         >
-          <span style={{ fontSize: "28px" }}>🙏</span>
+          <HandHeart size={28} style={{ color: "var(--color-accent-500)" }} />
         </div>
         <p
           style={{
@@ -705,7 +706,7 @@ export default function PrayerStep({ data, onNext }: PrayerStepProps) {
               >
                 He speaks in the stillness.
                 <br />
-                — 1 Kings 19:12
+                - 1 Kings 19:12
               </p>
             )}
 

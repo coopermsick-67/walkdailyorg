@@ -1,7 +1,7 @@
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy — Walk Daily',
+  title: 'Privacy Policy - Walk Daily',
   description: 'Walk Daily privacy policy. Learn how we protect your data.',
 }
 
