@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import PrayPage from "./PrayPage";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Guided Prayer — Walk Daily",
   description:

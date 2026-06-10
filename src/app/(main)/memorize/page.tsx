@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import MemorizePage from "./MemorizePage";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Verse Memory — Walk Daily",
   description:
