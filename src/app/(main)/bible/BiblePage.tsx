@@ -14,6 +14,7 @@ import CrossReferences from "@/components/bible/CrossReferences";
 import { BibleVerseSkeleton } from "@/components/ui/Skeletons";
 import { useToast } from "@/components/ui/Toast";
 import { createClient } from "@/lib/supabase/client";
+import { resetStaleDatabasesIfNeeded } from "@/lib/offline-cache";
 import {
   ArrowLeft,
   ChevronLeft,
@@ -110,9 +111,13 @@ export default function BiblePage() {
   const readingRef = useRef<HTMLDivElement>(null);
   const chapterCompleteFiredRef = useRef<string | null>(null);
 
+  // Reset any stale IDB schema before touching IDB — runs once per session.
+  // Nukes old DB names (v1 shared-DB bug) so idb-keyval can create clean stores.
   useEffect(() => {
-    loadBookmarks();
-    loadHighlights();
+    resetStaleDatabasesIfNeeded().then(() => {
+      loadBookmarks();
+      loadHighlights();
+    });
   }, [loadBookmarks, loadHighlights]);
 
   // Reset chapter complete tracker when chapter changes

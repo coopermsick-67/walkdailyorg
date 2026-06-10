@@ -1,20 +1,68 @@
 import { get, set, del, keys, createStore } from "idb-keyval";
 import type { BibleVerse } from "./bible-api";
 
-const BIBLE_STORE = "bible-cache";
-const BOOKMARKS_STORE = "bible-bookmarks";
-const HIGHLIGHTS_STORE = "bible-highlights";
-const DAILY_VERSE_STORE = "bible-daily-verse";
+// ---------------------------------------------------------------------------
+// Schema version. Bump this string whenever DB names or store names change.
+// On a version mismatch, ALL known IDB databases are deleted and recreated.
+// ---------------------------------------------------------------------------
+const SCHEMA_VERSION = "2";
+const SCHEMA_LS_KEY = "walkdaily-idb-v";
 
-// Each store gets its own DB to avoid idb-keyval's single-store-per-DB limitation.
-// Sharing a DB name across createStore() calls causes "object store not found" errors
-// when the onupgradeneeded handler for each call only creates one store per open().
-const bibleStore = createStore("bible-cache-db", BIBLE_STORE);
-const bookmarksStore = createStore("bible-bookmarks-db", BOOKMARKS_STORE);
-const highlightsStore = createStore("bible-highlights-db", HIGHLIGHTS_STORE);
-const dailyVerseStore = createStore("bible-daily-verse-db", DAILY_VERSE_STORE);
+// Renamed to v2 to abandon the v1 bug where all stores shared one DB.
+// idb-keyval's createStore opens exactly one DB and creates one store in
+// onupgradeneeded — sharing a DB name across multiple createStore() calls
+// means only the first store is ever created, causing the
+// "object store not found" IDBTransaction error for every other store.
+const bibleStore = createStore("bible-cache-v2-db", "bible-cache");
+const bookmarksStore = createStore("bible-bookmarks-v2-db", "bible-bookmarks");
+const highlightsStore = createStore("bible-highlights-v2-db", "bible-highlights");
+const dailyVerseStore = createStore("bible-daily-verse-v2-db", "bible-daily-verse");
 
-/* ---------- Chapter Cache ---------- */
+// Every DB name this app has ever created — nuked on schema version bump.
+const ALL_KNOWN_DBS = [
+  "bible-cache-db",
+  "bible-bookmarks-db",
+  "bible-highlights-db",
+  "bible-daily-verse-db",
+  "bible-cache-v2-db",
+  "bible-bookmarks-v2-db",
+  "bible-highlights-v2-db",
+  "bible-daily-verse-v2-db",
+  "keyval-store",
+];
+
+/**
+ * Call once at startup (e.g. in BiblePage's first useEffect).
+ * If the stored schema version doesn't match SCHEMA_VERSION, deletes every
+ * known IDB database so stale object-store layouts can't cause crashes.
+ * Safe to call multiple times per session — no-op after the first run.
+ */
+export async function resetStaleDatabasesIfNeeded(): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    if (localStorage.getItem(SCHEMA_LS_KEY) === SCHEMA_VERSION) return;
+    await Promise.allSettled(
+      ALL_KNOWN_DBS.map(
+        (name) =>
+          new Promise<void>((resolve) => {
+            try {
+              const req = indexedDB.deleteDatabase(name);
+              req.onsuccess = req.onerror = req.onblocked = () => resolve();
+            } catch {
+              resolve();
+            }
+          }),
+      ),
+    );
+    localStorage.setItem(SCHEMA_LS_KEY, SCHEMA_VERSION);
+  } catch {
+    // Non-critical — never block the app if reset fails.
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Chapter Cache
+// ---------------------------------------------------------------------------
 
 export type CachedChapter = {
   bibleId: string;
@@ -25,65 +73,60 @@ export type CachedChapter = {
 
 const MAX_CACHED_CHAPTERS = 5;
 
-/**
- * Cache a chapter's verses. Keeps only the last 5 chapters.
- */
 export async function cacheChapter(
   bibleId: string,
   chapterId: string,
   verses: BibleVerse[],
 ): Promise<void> {
-  const key = `bible-cache-${bibleId}-${chapterId}`;
-  const entry: CachedChapter = {
-    bibleId,
-    chapterId,
-    verses,
-    cachedAt: Date.now(),
-  };
-  await set(key, entry, bibleStore);
+  try {
+    const key = `bible-cache-${bibleId}-${chapterId}`;
+    const entry: CachedChapter = { bibleId, chapterId, verses, cachedAt: Date.now() };
+    await set(key, entry, bibleStore);
 
-  // Prune old entries
-  const allKeys = await keys(bibleStore);
-  if (allKeys.length > MAX_CACHED_CHAPTERS) {
-    // Sort by cachedAt and remove oldest
-    const entries: Array<{ key: string; cachedAt: number }> = [];
-    for (const k of allKeys) {
-      const val = await get<CachedChapter>(k as string, bibleStore);
-      if (val) entries.push({ key: k as string, cachedAt: val.cachedAt });
+    const allKeys = await keys(bibleStore);
+    if (allKeys.length > MAX_CACHED_CHAPTERS) {
+      const entries: Array<{ key: string; cachedAt: number }> = [];
+      for (const k of allKeys) {
+        const val = await get<CachedChapter>(k as string, bibleStore);
+        if (val) entries.push({ key: k as string, cachedAt: val.cachedAt });
+      }
+      entries.sort((a, b) => a.cachedAt - b.cachedAt);
+      const toRemove = entries.slice(0, entries.length - MAX_CACHED_CHAPTERS);
+      for (const r of toRemove) await del(r.key, bibleStore);
     }
-    entries.sort((a, b) => a.cachedAt - b.cachedAt);
-    const toRemove = entries.slice(0, entries.length - MAX_CACHED_CHAPTERS);
-    for (const r of toRemove) {
-      await del(r.key, bibleStore);
-    }
+  } catch {
+    // Cache is best-effort — never crash on IDB failure.
   }
 }
 
-/**
- * Retrieve a cached chapter.
- */
 export async function getCachedChapter(
   bibleId: string,
   chapterId: string,
 ): Promise<CachedChapter | undefined> {
-  const key = `bible-cache-${bibleId}-${chapterId}`;
-  return get<CachedChapter>(key, bibleStore);
-}
-
-/**
- * Get all cached chapters.
- */
-export async function getAllCachedChapters(): Promise<CachedChapter[]> {
-  const allKeys = await keys(bibleStore);
-  const chapters: CachedChapter[] = [];
-  for (const k of allKeys) {
-    const val = await get<CachedChapter>(k as string, bibleStore);
-    if (val) chapters.push(val);
+  try {
+    return await get<CachedChapter>(`bible-cache-${bibleId}-${chapterId}`, bibleStore);
+  } catch {
+    return undefined;
   }
-  return chapters;
 }
 
-/* ---------- Bookmarks Cache ---------- */
+export async function getAllCachedChapters(): Promise<CachedChapter[]> {
+  try {
+    const allKeys = await keys(bibleStore);
+    const chapters: CachedChapter[] = [];
+    for (const k of allKeys) {
+      const val = await get<CachedChapter>(k as string, bibleStore);
+      if (val) chapters.push(val);
+    }
+    return chapters;
+  } catch {
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Bookmarks Cache
+// ---------------------------------------------------------------------------
 
 export type CachedBookmark = {
   verse: string;
@@ -95,29 +138,34 @@ export type CachedBookmark = {
 };
 
 export async function cacheBookmark(bookmark: CachedBookmark): Promise<void> {
-  const key = `bookmark-${bookmark.bibleId}-${bookmark.reference}`;
-  await set(key, bookmark, bookmarksStore);
+  try {
+    await set(`bookmark-${bookmark.bibleId}-${bookmark.reference}`, bookmark, bookmarksStore);
+  } catch {}
 }
 
-export async function removeCachedBookmark(
-  bibleId: string,
-  reference: string,
-): Promise<void> {
-  const key = `bookmark-${bibleId}-${reference}`;
-  await del(key, bookmarksStore);
+export async function removeCachedBookmark(bibleId: string, reference: string): Promise<void> {
+  try {
+    await del(`bookmark-${bibleId}-${reference}`, bookmarksStore);
+  } catch {}
 }
 
 export async function getCachedBookmarks(): Promise<CachedBookmark[]> {
-  const allKeys = await keys(bookmarksStore);
-  const bookmarks: CachedBookmark[] = [];
-  for (const k of allKeys) {
-    const val = await get<CachedBookmark>(k as string, bookmarksStore);
-    if (val) bookmarks.push(val);
+  try {
+    const allKeys = await keys(bookmarksStore);
+    const bookmarks: CachedBookmark[] = [];
+    for (const k of allKeys) {
+      const val = await get<CachedBookmark>(k as string, bookmarksStore);
+      if (val) bookmarks.push(val);
+    }
+    return bookmarks;
+  } catch {
+    return [];
   }
-  return bookmarks;
 }
 
-/* ---------- Highlights Cache ---------- */
+// ---------------------------------------------------------------------------
+// Highlights Cache
+// ---------------------------------------------------------------------------
 
 export type CachedHighlight = {
   verse: string;
@@ -130,29 +178,38 @@ export type CachedHighlight = {
 };
 
 export async function cacheHighlight(highlight: CachedHighlight): Promise<void> {
-  const key = `highlight-${highlight.bibleId}-${highlight.reference}`;
-  await set(key, highlight, highlightsStore);
+  try {
+    await set(
+      `highlight-${highlight.bibleId}-${highlight.reference}`,
+      highlight,
+      highlightsStore,
+    );
+  } catch {}
 }
 
-export async function removeCachedHighlight(
-  bibleId: string,
-  reference: string,
-): Promise<void> {
-  const key = `highlight-${bibleId}-${reference}`;
-  await del(key, highlightsStore);
+export async function removeCachedHighlight(bibleId: string, reference: string): Promise<void> {
+  try {
+    await del(`highlight-${bibleId}-${reference}`, highlightsStore);
+  } catch {}
 }
 
 export async function getCachedHighlights(): Promise<CachedHighlight[]> {
-  const allKeys = await keys(highlightsStore);
-  const highlights: CachedHighlight[] = [];
-  for (const k of allKeys) {
-    const val = await get<CachedHighlight>(k as string, highlightsStore);
-    if (val) highlights.push(val);
+  try {
+    const allKeys = await keys(highlightsStore);
+    const highlights: CachedHighlight[] = [];
+    for (const k of allKeys) {
+      const val = await get<CachedHighlight>(k as string, highlightsStore);
+      if (val) highlights.push(val);
+    }
+    return highlights;
+  } catch {
+    return [];
   }
-  return highlights;
 }
 
-/* ---------- Daily Verse Cache ---------- */
+// ---------------------------------------------------------------------------
+// Daily Verse Cache
+// ---------------------------------------------------------------------------
 
 export type CachedDailyVerse = {
   date: string;
@@ -163,18 +220,26 @@ export type CachedDailyVerse = {
 };
 
 export async function cacheDailyVerse(verse: CachedDailyVerse): Promise<void> {
-  await set("daily-verse-today", verse, dailyVerseStore);
+  try {
+    await set("daily-verse-today", verse, dailyVerseStore);
+  } catch {}
 }
 
 export async function getCachedDailyVerse(): Promise<CachedDailyVerse | undefined> {
-  return get<CachedDailyVerse>("daily-verse-today", dailyVerseStore);
+  try {
+    return await get<CachedDailyVerse>("daily-verse-today", dailyVerseStore);
+  } catch {
+    return undefined;
+  }
 }
 
-/* ---------- Clear All ---------- */
+// ---------------------------------------------------------------------------
+// Clear All
+// ---------------------------------------------------------------------------
 
 export async function clearAllCache(): Promise<void> {
-  const allKeys = await keys(bibleStore);
-  for (const k of allKeys) {
-    await del(k as string, bibleStore);
-  }
+  try {
+    const allKeys = await keys(bibleStore);
+    for (const k of allKeys) await del(k as string, bibleStore);
+  } catch {}
 }
