@@ -76,23 +76,22 @@ async function handleChapter(bibleId: string, chapterId: string): Promise<NextRe
   const bookName = BOOKID_TO_NAME[bookId] ?? bookId;
   const abbr = BIBLEABBR[bibleId] ?? bibleId.slice(0, 3).toUpperCase();
 
-  if (APIBIBLE_IDS.has(bibleId)) {
-    if (!API_KEY) {
-      return NextResponse.json({ error: "BIBLE_API_KEY not configured" }, { status: 503 });
-    }
+  if (APIBIBLE_IDS.has(bibleId) && API_KEY) {
     try {
       const url = `${API_BASE}/bibles/${bibleId}/chapters/${chapterId}?content-type=text&include-notes=false&include-titles=false&include-chapter-numbers=false&include-verse-numbers=true&include-verse-spans=false`;
       const res = await fetch(url, { headers: { "api-key": API_KEY }, next: { revalidate: 86400 } });
-      if (!res.ok) return NextResponse.json({ error: `API.Bible error ${res.status}` }, { status: 502 });
-      const data = (await res.json()) as { data?: { content?: string } };
-      const verses = parseApiBibleVerses(data.data?.content ?? "", bookName, chapter, abbr);
-      return NextResponse.json({ verses });
-    } catch (err) {
-      return NextResponse.json({ error: String(err) }, { status: 502 });
+      if (res.ok) {
+        const data = (await res.json()) as { data?: { content?: string } };
+        const verses = parseApiBibleVerses(data.data?.content ?? "", bookName, chapter, abbr);
+        return NextResponse.json({ verses });
+      }
+      // API.Bible returned error — fall through to KJV
+    } catch {
+      // Fetch failed — fall through to KJV
     }
   }
 
-  // KJV via bible-api.com
+  // KJV via bible-api.com (used for KJV bibleId, or as fallback when API_KEY missing/API.Bible fails)
   const bookKjvName = BOOK_TO_KJV_NAME[bookId];
   if (!bookKjvName) return NextResponse.json({ error: `Unknown book: ${bookId}` }, { status: 400 });
   try {
@@ -118,17 +117,18 @@ async function handlePassage(bibleId: string, passageId: string): Promise<NextRe
   if (!passageId) return NextResponse.json({ error: "passageId required" }, { status: 400 });
   const abbr = BIBLEABBR[bibleId] ?? "NIV";
 
-  if (APIBIBLE_IDS.has(bibleId)) {
-    if (!API_KEY) return NextResponse.json({ error: "BIBLE_API_KEY not configured" }, { status: 503 });
+  if (APIBIBLE_IDS.has(bibleId) && API_KEY) {
     try {
       const url = `${API_BASE}/bibles/${bibleId}/passages/${passageId}?content-type=text&include-notes=false&include-titles=false&include-chapter-numbers=false&include-verse-numbers=false&include-verse-spans=false`;
       const res = await fetch(url, { headers: { "api-key": API_KEY }, next: { revalidate: 86400 } });
-      if (!res.ok) return NextResponse.json({ error: `API.Bible error ${res.status}` }, { status: 502 });
-      const data = (await res.json()) as { data?: { content?: string; reference?: string } };
-      const text = (data.data?.content ?? "").replace(/\s+/g, " ").trim();
-      return NextResponse.json({ text, reference: data.data?.reference ?? passageId, translation: abbr });
-    } catch (err) {
-      return NextResponse.json({ error: String(err) }, { status: 502 });
+      if (res.ok) {
+        const data = (await res.json()) as { data?: { content?: string; reference?: string } };
+        const text = (data.data?.content ?? "").replace(/\s+/g, " ").trim();
+        return NextResponse.json({ text, reference: data.data?.reference ?? passageId, translation: abbr });
+      }
+      // API.Bible returned error — fall through to KJV
+    } catch {
+      // Fetch failed — fall through to KJV
     }
   }
 
