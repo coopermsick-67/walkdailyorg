@@ -16,7 +16,7 @@ export const runtime = "edge";
 const DAILY_LIMIT = 50;
 const MAX_BODY_BYTES = 64_000;
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "";
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || process.env.NEXT_PUBLIC_OPENROUTER_API_KEY || "";
 
 const SYSTEM_PROMPTS: Record<string, string> = {
   chat: `You are a faithful, warm, and knowledgeable Christian AI assistant for the Walk Daily app.
@@ -234,6 +234,8 @@ async function* streamOpenRouter(
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
+      "HTTP-Referer": "https://walkdaily.org",
+      "X-Title": "Walk Daily",
     },
     body: JSON.stringify({
       model,
@@ -392,9 +394,9 @@ export async function POST(request: NextRequest) {
     const messages = buildMessages(action, body, clientMessages, dynamicPrompt);
 
     // Select model
-    const model = process.env.AI_MODEL_PRIMARY || "nex-agi/nex-n2-pro:free";
+    const model = process.env.AI_MODEL_PRIMARY || "openai/gpt-4o-mini";
     const fallbackModel =
-      process.env.AI_MODEL_FALLBACK || "moonshotai/kimi-k2.6:free";
+      process.env.AI_MODEL_FALLBACK || "meta-llama/llama-3.1-8b-instruct:free";
 
     // Stream response
     const encoder = new TextEncoder();

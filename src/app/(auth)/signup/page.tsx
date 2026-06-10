@@ -27,7 +27,6 @@ export default function SignupPage() {
   const [denomination, setDenomination] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [emailConfirmed, setEmailConfirmed] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -75,13 +74,6 @@ export default function SignupPage() {
           .eq("id", authData.user.id);
       }
 
-      // Email confirmation required — no session yet
-      if (!authData.session) {
-        setEmailConfirmed(true);
-        setLoading(false);
-        return;
-      }
-
       router.push("/onboarding");
       router.refresh();
     } catch (err) {
@@ -89,68 +81,6 @@ export default function SignupPage() {
       setLoading(false);
     }
   };
-
-  if (emailConfirmed) {
-    return (
-      <div className="w-full">
-        <div className="text-center mb-6">
-          <div className="flex items-center justify-center gap-3 mb-3">
-            <div
-              className="w-11 h-11 rounded-xl flex items-center justify-center"
-              style={{
-                background: "linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))",
-                boxShadow: "0 2px 8px rgba(26,58,110,0.25)",
-              }}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <rect x="5" y="3" width="14" height="18" rx="2.5" stroke="white" strokeWidth="1.8" />
-                <line x1="12" y1="3" x2="12" y2="21" stroke="white" strokeWidth="1.8" />
-                <line x1="12" y1="4" x2="12" y2="2" stroke="var(--color-accent-500)" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </div>
-            <h1 className="text-2xl font-bold text-white font-heading">Walk Daily</h1>
-          </div>
-        </div>
-        <div
-          className="rounded-2xl p-8 text-center space-y-4"
-          style={{
-            background: "rgba(255, 255, 255, 0.08)",
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
-            border: "1px solid rgba(255, 255, 255, 0.12)",
-          }}
-        >
-          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-2" style={{ background: "rgba(201, 162, 39, 0.15)" }}>
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-              <path d="M20 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V6a2 2 0 00-2-2z" stroke="var(--color-accent-500)" strokeWidth="1.8" />
-              <path d="M2 6l10 7 10-7" stroke="var(--color-accent-500)" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
-          </div>
-          <h2 className="text-xl font-bold text-white font-heading">Check your email</h2>
-          <p className="text-sm text-white/60 leading-relaxed">
-            We sent a confirmation link to <span className="text-white font-medium">{email}</span>. Click it to activate your account and start your faith journey.
-          </p>
-          <p className="text-xs text-white/40 pt-2">
-            Didn&apos;t receive it? Check your spam folder or{" "}
-            <button
-              onClick={() => setEmailConfirmed(false)}
-              className="underline hover:text-white/60 transition-colors"
-              style={{ color: "var(--color-accent-500)" }}
-            >
-              try again
-            </button>.
-          </p>
-          <Link
-            href="/login"
-            className="block w-full py-3 px-4 rounded-xl text-sm font-semibold text-center transition-all duration-200 hover:scale-[1.01] mt-4"
-            style={{ background: "rgba(255,255,255,0.1)", color: "white", border: "1px solid rgba(255,255,255,0.15)" }}
-          >
-            Back to Sign In
-          </Link>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="w-full">
