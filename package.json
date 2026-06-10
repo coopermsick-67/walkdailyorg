@@ -8,9 +8,20 @@
     "start": "next start"
   },
   "dependencies": {
-    "next": "16.3.0-preview.0",
-    "react": "19.2.7",
-    "react-dom": "19.2.7"
+    "@supabase/ssr": "^0.12.0",
+    "@supabase/supabase-js": "^2.108.1",
+    "@tiptap/react": "^3.26.0",
+    "@tiptap/starter-kit": "^3.26.0",
+    "idb": "^8.0.3",
+    "idb-keyval": "^6.2.5",
+    "lucide-react": "^1.17.0",
+    "next": "^14.2.3",
+    "next-pwa": "^5.6.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tiptap": "^1.32.2",
+    "workbox-window": "^7.4.1",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

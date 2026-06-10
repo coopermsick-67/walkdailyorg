@@ -1,0 +1,48 @@
+{
+  "name": "Walk Daily",
+  "short_name": "Walk",
+  "description": "Your daily faith companion - Bible, prayer, journal, and AI chat.",
+  "start_url": "/home",
+  "display": "standalone",
+  "background_color": "#fdfcf8",
+  "theme_color": "#1a3a6e",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "en",
+  "categories": ["lifestyle", "education", "books"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Daily Verse",
+      "short_name": "Verse",
+      "url": "/bible",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Prayer Wall",
+      "short_name": "Prayer",
+      "url": "/prayer",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "My Journal",
+      "short_name": "Journal",
+      "url": "/journal",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
