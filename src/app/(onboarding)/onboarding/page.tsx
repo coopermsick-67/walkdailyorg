@@ -88,13 +88,16 @@ export default function OnboardingPage() {
   useEffect(() => {
     async function init() {
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      // Use getSession (cookie-based, no network call) so onboarding loads
+      // even when Supabase credentials are temporarily misconfigured.
+      const { data: { session } } = await supabase.auth.getSession();
 
-      if (!user) {
+      if (!session?.user) {
         router.push("/login");
         return;
       }
 
+      const user = session.user;
       setUserId(user.id);
 
       const { data: profile } = await supabase

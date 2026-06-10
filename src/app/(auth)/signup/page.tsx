@@ -5,6 +5,52 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
+function CheckEmailScreen({ email }: { email: string }) {
+  return (
+    <div className="w-full text-center">
+      <div className="flex items-center justify-center gap-3 mb-6">
+        <div
+          className="w-11 h-11 rounded-xl flex items-center justify-center"
+          style={{
+            background: "linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))",
+            boxShadow: "0 2px 8px rgba(26,58,110,0.25)",
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <rect x="5" y="3" width="14" height="18" rx="2.5" stroke="white" strokeWidth="1.8" />
+            <line x1="12" y1="3" x2="12" y2="21" stroke="white" strokeWidth="1.8" />
+          </svg>
+        </div>
+        <h1 className="text-2xl font-bold text-white font-heading">Walk Daily</h1>
+      </div>
+      <div
+        className="rounded-2xl p-8"
+        style={{
+          background: "rgba(255,255,255,0.08)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          border: "1px solid rgba(255,255,255,0.12)",
+        }}
+      >
+        <div className="flex justify-center mb-4">
+          <div
+            className="w-16 h-16 rounded-full flex items-center justify-center"
+            style={{ background: "rgba(201,162,39,0.15)", border: "1px solid rgba(201,162,39,0.3)" }}
+          >
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+              <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" stroke="var(--color-accent-500)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+        </div>
+        <h2 className="text-xl font-semibold text-white mb-2 font-heading">Check your email</h2>
+        <p className="text-sm text-white/50 mb-1">We sent a confirmation link to</p>
+        <p className="text-sm font-medium mb-6" style={{ color: "var(--color-accent-500)" }}>{email}</p>
+        <p className="text-xs text-white/40">Click the link in the email to activate your account and begin your faith journey.</p>
+      </div>
+    </div>
+  );
+}
+
 const DENOMINATIONS = [
   "Non-denominational",
   "Baptist",
@@ -27,6 +73,7 @@ export default function SignupPage() {
   const [denomination, setDenomination] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [awaitingEmailConfirm, setAwaitingEmailConfirm] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -74,6 +121,13 @@ export default function SignupPage() {
           });
       }
 
+      // If no session, Supabase requires email confirmation before the user can log in
+      if (!authData.session) {
+        setAwaitingEmailConfirm(true);
+        setLoading(false);
+        return;
+      }
+
       router.push("/onboarding");
       router.refresh();
     } catch (err) {
@@ -81,6 +135,10 @@ export default function SignupPage() {
       setLoading(false);
     }
   };
+
+  if (awaitingEmailConfirm) {
+    return <CheckEmailScreen email={email} />;
+  }
 
   return (
     <div className="w-full">

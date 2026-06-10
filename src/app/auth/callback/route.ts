@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
 
   // Handle OAuth errors (e.g. user denied access)
   if (error) {
-    const redirectUrl = new URL('/auth/login', requestUrl.origin)
+    const redirectUrl = new URL('/login', requestUrl.origin)
     redirectUrl.searchParams.set('error', errorDescription || error)
     return NextResponse.redirect(redirectUrl)
   }
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
   if (code) {
     const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
     if (exchangeError) {
-      const redirectUrl = new URL('/auth/login', requestUrl.origin)
+      const redirectUrl = new URL('/login', requestUrl.origin)
       redirectUrl.searchParams.set('error', 'Failed to sign in. Please try again.')
       return NextResponse.redirect(redirectUrl)
     }
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
     })
 
     if (verifyError) {
-      const redirectUrl = new URL('/auth/login', requestUrl.origin)
+      const redirectUrl = new URL('/login', requestUrl.origin)
       redirectUrl.searchParams.set('error', 'Invalid or expired link. Please request a new one.')
       return NextResponse.redirect(redirectUrl)
     }
