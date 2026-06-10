@@ -10,10 +10,19 @@ import { createBrowserClient } from "@supabase/ssr";
  * Security (RLS) policies on the database.
  */
 export function createClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ""
-  );
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !key) {
+    // Return a dummy client that gracefully fails if env vars are missing
+    // This prevents crashes during local dev or when env vars aren't configured
+    return createBrowserClient(
+      url || "https://placeholder.supabase.co",
+      key || "placeholder-key"
+    );
+  }
+
+  return createBrowserClient(url, key);
 }
 
 // NOTE: Do NOT export a module-level singleton. Always call createClient()

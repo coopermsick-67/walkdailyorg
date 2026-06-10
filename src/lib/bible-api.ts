@@ -1,6 +1,6 @@
 const BIBLE_API_URL = "https://rest.api.bible";
 const BIBLE_API_KEY =
-  process.env.NEXT_PUBLIC_BIBLE_API_KEY;
+  process.env.NEXT_PUBLIC_BIBLE_API_KEY || process.env.BIBLE_API_KEY;
 
 export type BibleTranslation = {
   id: string;

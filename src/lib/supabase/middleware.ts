@@ -20,9 +20,15 @@ export async function updateSession(request: NextRequest) {
     url.pathname.startsWith(prefix)
   );
 
-  const supabaseClient = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    // Env vars not configured — skip auth checks and allow through
+    return response;
+  }
+
+  const supabaseClient = createServerClient(supabaseUrl, supabaseKey,
     {
       cookies: {
         get(name: string) {
