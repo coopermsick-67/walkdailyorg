@@ -420,7 +420,38 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================================
--- 12. GRANTS
+-- 12. POSTGREST RELATIONSHIP FKs
+-- Without these, PostgREST cannot resolve `profiles:user_id (...)` joins
+-- and the feed queries fail silently, showing an empty list.
+-- ============================================================
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'fk_prayer_requests_profile'
+  ) THEN
+    ALTER TABLE public.prayer_requests
+      ADD CONSTRAINT fk_prayer_requests_profile
+      FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'fk_journal_entries_profile'
+  ) THEN
+    ALTER TABLE public.journal_entries
+      ADD CONSTRAINT fk_journal_entries_profile
+      FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'fk_prayer_comments_profile'
+  ) THEN
+    ALTER TABLE public.prayer_comments
+      ADD CONSTRAINT fk_prayer_comments_profile
+      FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
+  END IF;
+END $$;
+
+-- ============================================================
+-- 13. GRANTS
 -- ============================================================
 
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
