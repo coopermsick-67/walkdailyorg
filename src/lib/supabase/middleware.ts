@@ -27,6 +27,7 @@ const PUBLIC_PREFIXES = [
   "/auth/",          // Supabase OAuth callbacks (/auth/callback etc.)
   "/api/auth/",      // auth API routes
   "/api/admin/",     // admin utilities (have their own secret-based auth)
+  "/api/bible",      // Bible proxy — public content, no user data
   "/api/webhooks/",
   "/onboarding",     // onboarding flow is gated internally
   "/icon-",
