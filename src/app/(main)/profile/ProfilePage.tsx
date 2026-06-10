@@ -99,12 +99,12 @@ export default function ProfilePage() {
 
     const { error } = await createClient()
       .from("profiles")
-      .update({
+      .upsert({
+        id: userId,
         display_name: displayName,
         denomination: denomination || null,
         preferred_translation: preferredTranslation,
-      })
-      .eq("id", userId);
+      });
 
     setSaving(false);
 
@@ -131,7 +131,8 @@ export default function ProfilePage() {
     const supabase = createClient();
     const { error } = await supabase
       .from("profiles")
-      .update({
+      .upsert({
+        id: userId,
         has_completed_onboarding: false,
         onboarding_step: 0,
         faith_journey_stage: null,
@@ -155,8 +156,7 @@ export default function ProfilePage() {
         onboarding_verse: null,
         onboarding_plan: null,
         onboarding_summary: null,
-      })
-      .eq("id", userId);
+      });
 
     if (error) {
       toastError("Failed to reset. Please try again.");
