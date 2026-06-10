@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { BibleVerse, BibleBook, BibleTranslation, DEFAULT_BIBLE_ID, getChapterVerses, getBibles, getBibleBooks, searchBible, getFallbackDailyVerse } from "./bible-api";
+import { BibleVerse, BibleBook, BibleTranslation, DEFAULT_BIBLE_ID, SUPPORTED_TRANSLATIONS, getChapterVerses, getBibles, getBibleBooks, searchBible, getFallbackDailyVerse, getVerseByReference } from "./bible-api";
 import { cacheChapter, getCachedChapter, cacheBookmark, removeCachedBookmark, cacheHighlight, removeCachedHighlight, getCachedBookmarks, getCachedHighlights, cacheDailyVerse, getCachedDailyVerse } from "./offline-cache";
 import type { CachedBookmark, CachedHighlight, CachedDailyVerse } from "./offline-cache";
 
@@ -69,7 +69,7 @@ export const useBibleStore = create<BibleState>((set, get) => ({
   currentBook: null,
   currentChapterId: null,
   currentChapterVerses: [],
-  translations: [],
+  translations: SUPPORTED_TRANSLATIONS,
   books: [],
   bookmarks: [],
   highlights: [],
@@ -82,8 +82,9 @@ export const useBibleStore = create<BibleState>((set, get) => ({
   error: null,
 
   setBibleId: (id: string) => {
-    set({ currentBibleId: id, books: [], currentBook: null, currentChapterId: null, currentChapterVerses: [] });
+    set({ currentBibleId: id, books: [], currentBook: null, currentChapterId: null, currentChapterVerses: [], dailyVerse: null });
     get().loadBooks();
+    get().loadDailyVerse();
   },
 
   navigateTo: async (book: BibleBook, chapter: number) => {
@@ -356,19 +357,24 @@ export const useBibleStore = create<BibleState>((set, get) => ({
   },
 
   loadDailyVerse: async () => {
-    // Try cache first
-    const cached = await getCachedDailyVerse();
+    const bibleId = get().currentBibleId;
     const today = new Date().toISOString().split("T")[0];
 
-    if (cached && cached.date === today) {
+    // Try cache — only use it when the translation matches
+    const cached = await getCachedDailyVerse();
+    if (cached && cached.date === today && cached.translation === (SUPPORTED_TRANSLATIONS.find((t) => t.id === bibleId)?.abbreviation ?? "KJV")) {
       set({ dailyVerse: cached });
       return;
     }
 
+    // Get the reference first (from Supabase or fallback)
+    let reference: string;
+    let baseText: string;
+    let baseTranslation: string;
+
     try {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
-
       const { data } = await supabase
         .from("daily_verses")
         .select("date, reference, verse_text, translation")
@@ -376,39 +382,36 @@ export const useBibleStore = create<BibleState>((set, get) => ({
         .single();
 
       if (data) {
-        const verse: CachedDailyVerse = {
-          date: data.date,
-          reference: data.reference,
-          text: data.verse_text,
-          translation: data.translation || "KJV",
-          cachedAt: Date.now(),
-        };
-        await cacheDailyVerse(verse);
-        set({ dailyVerse: verse });
+        reference = data.reference;
+        baseText = data.verse_text;
+        baseTranslation = data.translation || "KJV";
       } else {
         const fallback = getFallbackDailyVerse();
-        set({
-          dailyVerse: {
-            date: today,
-            reference: fallback.reference,
-            text: fallback.text,
-            translation: fallback.translation,
-            cachedAt: Date.now(),
-          },
-        });
+        reference = fallback.reference;
+        baseText = fallback.text;
+        baseTranslation = fallback.translation;
       }
     } catch {
       const fallback = getFallbackDailyVerse();
-      set({
-        dailyVerse: {
-          date: today,
-          reference: fallback.reference,
-          text: fallback.text,
-          translation: fallback.translation,
-          cachedAt: Date.now(),
-        },
-      });
+      reference = fallback.reference;
+      baseText = fallback.text;
+      baseTranslation = fallback.translation;
     }
+
+    // Try to fetch the verse in the user's current translation
+    let text = baseText;
+    let translation = baseTranslation;
+    if (bibleId !== "kjv") {
+      const fetched = await getVerseByReference(bibleId, reference);
+      if (fetched) {
+        text = fetched.text;
+        translation = fetched.translation;
+      }
+    }
+
+    const verse: CachedDailyVerse = { date: today, reference, text, translation, cachedAt: Date.now() };
+    await cacheDailyVerse(verse);
+    set({ dailyVerse: verse });
   },
 
   clearError: () => set({ error: null }),

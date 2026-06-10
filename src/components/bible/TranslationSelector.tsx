@@ -4,10 +4,7 @@ import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useBibleStore } from "@/lib/bible-store";
 import { ChevronDown } from "lucide-react";
 
-const TOP_TRANSLATIONS = [
-  "ESV", "NIV", "NLT", "CSB", "KJV", "NKJV",
-  "NASB", "NET", "HCSB", "MSG",
-];
+const TOP_TRANSLATIONS = ["NIV", "NLT", "CSB", "KJV"];
 
 export default function TranslationSelector() {
   const { currentBibleId, translations, setBibleId, loadTranslations } = useBibleStore();
@@ -47,9 +44,7 @@ export default function TranslationSelector() {
   }, [isOpen]);
 
   const current = translations.find((t) => t.id === currentBibleId);
-  const displayLabel = current
-    ? `${current.abbreviation} - ${current.name}`
-    : "Loading...";
+  const displayLabel = current ? `${current.abbreviation} - ${current.name}` : currentBibleId;
 
   // Build the top-10 quick-pick list (when search is empty) or filtered list
   const matches = useMemo(() => {

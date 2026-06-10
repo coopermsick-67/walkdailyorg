@@ -1,6 +1,3 @@
-// Bible API — uses bible-api.com (free, no key required)
-const BIBLE_API_BASE = "https://bible-api.com";
-
 export type BibleTranslation = {
   id: string;
   name: string;
@@ -28,16 +25,15 @@ export type SearchResult = {
   total: number;
 };
 
-// Supported translations on bible-api.com
-export const POPULAR_TRANSLATIONS: Record<string, string> = {
-  KJV: "kjv",
-  ASV: "asv",
-  WEB: "web",
-  BBE: "bbe",
-  YLT: "ylt",
-};
+// Translations available in this app (NIV/NLT/CSB via API.Bible; KJV via bible-api.com)
+export const SUPPORTED_TRANSLATIONS: BibleTranslation[] = [
+  { id: "78a9f6124f344018-01", name: "New International Version", abbreviation: "NIV" },
+  { id: "d6e14a625393b4da-01", name: "New Living Translation", abbreviation: "NLT" },
+  { id: "a556c5305ee15c3f-01", name: "Christian Standard Bible", abbreviation: "CSB" },
+  { id: "kjv", name: "King James Version", abbreviation: "KJV" },
+];
 
-export const DEFAULT_BIBLE_ID = "kjv";
+export const DEFAULT_BIBLE_ID = "78a9f6124f344018-01"; // NIV
 
 // All 66 Protestant books: [id, name, abbreviation, chapterCount]
 const BOOKS_DATA: [string, string, string, number][] = [
@@ -113,24 +109,19 @@ const BOOK_NAMES: Record<string, string> = Object.fromEntries(
   BOOKS_DATA.map(([id, name]) => [id, name]),
 );
 
-// Names as accepted by bible-api.com
-const BOOK_API_NAMES: Record<string, string> = {
-  GEN: "genesis", EXO: "exodus", LEV: "leviticus", NUM: "numbers", DEU: "deuteronomy",
-  JOS: "joshua", JDG: "judges", RUT: "ruth", "1SA": "1 samuel", "2SA": "2 samuel",
-  "1KI": "1 kings", "2KI": "2 kings", "1CH": "1 chronicles", "2CH": "2 chronicles",
-  EZR: "ezra", NEH: "nehemiah", EST: "esther", JOB: "job", PSA: "psalms",
-  PRO: "proverbs", ECC: "ecclesiastes", SNG: "song of solomon", ISA: "isaiah",
-  JER: "jeremiah", LAM: "lamentations", EZK: "ezekiel", DAN: "daniel",
-  HOS: "hosea", JOL: "joel", AMO: "amos", OBA: "obadiah", JON: "jonah",
-  MIC: "micah", NAM: "nahum", HAB: "habakkuk", ZEP: "zephaniah", HAG: "haggai",
-  ZEC: "zechariah", MAL: "malachi", MAT: "matthew", MRK: "mark", LUK: "luke",
-  JHN: "john", ACT: "acts", ROM: "romans", "1CO": "1 corinthians", "2CO": "2 corinthians",
-  GAL: "galatians", EPH: "ephesians", PHP: "philippians", COL: "colossians",
-  "1TH": "1 thessalonians", "2TH": "2 thessalonians", "1TI": "1 timothy", "2TI": "2 timothy",
-  TIT: "titus", PHM: "philemon", HEB: "hebrews", JAS: "james", "1PE": "1 peter",
-  "2PE": "2 peter", "1JN": "1 john", "2JN": "2 john", "3JN": "3 john", JUD: "jude",
-  REV: "revelation",
-};
+// Build a name/abbreviation → bookId lookup for reference parsing
+const BOOK_NAME_TO_ID: Record<string, string> = (() => {
+  const m: Record<string, string> = {};
+  for (const [id, name, abbr] of BOOKS_DATA) {
+    m[name.toLowerCase()] = id;
+    m[abbr.toLowerCase()] = id;
+  }
+  // Common singular / alternate forms
+  m["psalm"] = "PSA";
+  m["song of songs"] = "SNG";
+  m["song"] = "SNG";
+  return m;
+})();
 
 const ALL_BOOKS: BibleBook[] = BOOKS_DATA.map(([id, name, abbreviation, numChapters]) => ({
   id,
@@ -174,6 +165,17 @@ const FALLBACK_DAILY_VERSES = [
   { reference: "Psalm 37:4", text: "Take delight in the Lord, and he will give you the desires of your heart.", translation: "KJV" },
 ];
 
+// Convert "John 3:16" or "Proverbs 3:5-6" into an API.Bible passageId like "JHN.3.16" or "PRO.3.5-PRO.3.6"
+export function referenceToPassageId(reference: string): string | null {
+  const m = reference.trim().match(/^(.+?)\s+(\d+):(\d+)(?:-(\d+))?$/);
+  if (!m) return null;
+  const bookId = BOOK_NAME_TO_ID[m[1].toLowerCase().trim()];
+  if (!bookId) return null;
+  const [, , chapter, startVerse, endVerse] = m;
+  const start = `${bookId}.${chapter}.${startVerse}`;
+  return endVerse ? `${start}-${bookId}.${chapter}.${endVerse}` : start;
+}
+
 export function getFallbackDailyVerse(): { reference: string; text: string; translation: string } {
   const start = new Date(new Date().getFullYear(), 0, 0).getTime();
   const dayOfYear = Math.floor((Date.now() - start) / 86_400_000);
@@ -195,79 +197,53 @@ export function getBookName(bookId: string): string {
   return BOOK_NAMES[bookId] || bookId;
 }
 
-/* ---------- API functions ---------- */
+/* ---------- API functions (all routed through /api/bible server proxy) ---------- */
 
 export async function getBibles(): Promise<BibleTranslation[]> {
-  return [
-    { id: "kjv", name: "King James Version", abbreviation: "KJV" },
-    { id: "asv", name: "American Standard Version", abbreviation: "ASV" },
-    { id: "web", name: "World English Bible", abbreviation: "WEB" },
-    { id: "bbe", name: "Bible in Basic English", abbreviation: "BBE" },
-    { id: "ylt", name: "Young's Literal Translation", abbreviation: "YLT" },
-  ];
+  return SUPPORTED_TRANSLATIONS;
 }
 
 export async function getBibleBooks(_bibleId: string): Promise<BibleBook[]> {
   return ALL_BOOKS;
 }
 
-export async function getChapterVerses(
-  bibleId: string,
-  chapterId: string,
-): Promise<BibleVerse[]> {
-  const { bookId, chapter } = parseChapterId(chapterId);
-  const bookApiName = BOOK_API_NAMES[bookId];
-  if (!bookApiName) throw new Error(`Unknown book ID: ${bookId}`);
-
-  const ref = `${bookApiName} ${chapter}`;
-  const url = `${BIBLE_API_BASE}/${encodeURIComponent(ref)}?translation=${bibleId}`;
-
-  const res = await fetch(url, { next: { revalidate: 86400 } });
-  if (!res.ok) {
-    throw new Error(`Bible API error ${res.status}: ${res.statusText}`);
-  }
-
-  const data = (await res.json()) as {
-    error?: string;
-    translation_name?: string;
-    verses?: { verse: number; text: string; book_name?: string }[];
-  };
-
+export async function getChapterVerses(bibleId: string, chapterId: string): Promise<BibleVerse[]> {
+  const url = `/api/bible?action=chapter&bibleId=${encodeURIComponent(bibleId)}&chapterId=${encodeURIComponent(chapterId)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Bible fetch error: ${res.status}`);
+  const data = (await res.json()) as { verses?: BibleVerse[]; error?: string };
   if (data.error) throw new Error(data.error);
-
-  const bookName = BOOK_NAMES[bookId] || bookId;
-
-  return (data.verses || []).map((v) => ({
-    verse: String(v.verse),
-    text: v.text.replace(/^\s*\d+\s+/, "").trim(),
-    reference: buildVerseReference(bookName, chapter, String(v.verse)),
-    translation: data.translation_name || bibleId.toUpperCase(),
-  }));
+  return data.verses ?? [];
 }
 
 export async function searchBible(bibleId: string, query: string): Promise<SearchResult> {
   try {
-    const url = `${BIBLE_API_BASE}/${encodeURIComponent(query)}?translation=${bibleId}`;
+    const url = `/api/bible?action=search&bibleId=${encodeURIComponent(bibleId)}&query=${encodeURIComponent(query)}`;
     const res = await fetch(url);
     if (!res.ok) return { verses: [], total: 0 };
-
-    const data = (await res.json()) as {
-      error?: string;
-      translation_name?: string;
-      verses?: { verse: number; text: string; book_name?: string; chapter?: number }[];
-    };
-
-    if (data.error) return { verses: [], total: 0 };
-
-    const verses: BibleVerse[] = (data.verses || []).map((v) => ({
-      verse: String(v.verse),
-      text: v.text.replace(/^\s*\d+\s+/, "").trim(),
-      reference: `${v.book_name || ""} ${v.chapter || ""}:${v.verse}`.trim(),
-      translation: data.translation_name,
-    }));
-
-    return { verses, total: verses.length };
+    const data = (await res.json()) as { verses?: BibleVerse[]; total?: number };
+    return { verses: data.verses ?? [], total: data.total ?? 0 };
   } catch {
     return { verses: [], total: 0 };
+  }
+}
+
+// Fetch a specific verse/passage in any supported translation via the server proxy.
+// Returns null if the reference can't be parsed or the fetch fails — caller should fall back to stored text.
+export async function getVerseByReference(
+  bibleId: string,
+  reference: string,
+): Promise<{ text: string; reference: string; translation: string } | null> {
+  const passageId = referenceToPassageId(reference);
+  if (!passageId) return null;
+  try {
+    const url = `/api/bible?action=passage&bibleId=${encodeURIComponent(bibleId)}&passageId=${encodeURIComponent(passageId)}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = (await res.json()) as { text?: string; reference?: string; translation?: string; error?: string };
+    if (data.error || !data.text) return null;
+    return { text: data.text, reference: data.reference ?? reference, translation: data.translation ?? bibleId };
+  } catch {
+    return null;
   }
 }
