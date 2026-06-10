@@ -393,10 +393,12 @@ export async function POST(request: NextRequest) {
     }
     const messages = buildMessages(action, body, clientMessages, dynamicPrompt);
 
-    // Select model
-    const model = process.env.AI_MODEL_PRIMARY || "openai/gpt-4o-mini";
-    const fallbackModel =
-      process.env.AI_MODEL_FALLBACK || "meta-llama/llama-3.1-8b-instruct:free";
+    // Select model chain: primary → fallback1 → fallback2
+    const model = process.env.AI_MODEL_PRIMARY || "tencent/hy3-preview";
+    const fallbackModels: string[] = [
+      process.env.AI_MODEL_FALLBACK || "nex-agi/nex-n2-pro:free",
+      process.env.AI_MODEL_FALLBACK2 || "openrouter/owl-alpha",
+    ];
 
     // Stream response
     const encoder = new TextEncoder();
@@ -418,29 +420,28 @@ export async function POST(request: NextRequest) {
           ctrl.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
         }
 
-        // Try primary model, fallback on failure
+        // Try primary, then each fallback in order
         (async () => {
-          try {
-            for await (const chunk of streamOpenRouter(OPENROUTER_API_KEY, messages, model)) {
-              push(chunk);
-            }
-          } catch (primaryErr) {
+          const chain = [model, ...fallbackModels];
+          let lastErr: unknown;
+          for (const candidate of chain) {
             try {
-              for await (const chunk of streamOpenRouter(
-                OPENROUTER_API_KEY,
-                messages,
-                fallbackModel,
-              )) {
+              for await (const chunk of streamOpenRouter(OPENROUTER_API_KEY, messages, candidate)) {
                 push(chunk);
               }
-            } catch (fallbackErr) {
-              const errMsg =
-                fallbackErr instanceof Error
-                  ? fallbackErr.message
-                  : "AI service unavailable";
-              const payload: AIStreamPayload = { error: errMsg };
-              ctrl.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+              lastErr = null;
+              break;
+            } catch (err) {
+              lastErr = err;
             }
+          }
+          if (lastErr) {
+            const errMsg =
+              lastErr instanceof Error
+                ? lastErr.message
+                : "AI service unavailable";
+            const payload: AIStreamPayload = { error: errMsg };
+            ctrl.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
           }
 
           finish();
