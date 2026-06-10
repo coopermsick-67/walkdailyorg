@@ -517,11 +517,12 @@ export default function JournalPage() {
           }}
         >
           <div
-            className="w-full sm:rounded-2xl max-w-lg max-h-[95vh] overflow-y-auto animate-fade-in-up"
+            className="w-full sm:rounded-2xl max-w-lg max-h-[95dvh] overflow-y-auto animate-fade-in-up"
             style={{
               background: "var(--surface-card)",
               boxShadow: "var(--shadow-lg)",
               borderRadius: "24px 24px 0 0",
+              paddingBottom: "env(safe-area-inset-bottom)",
             }}
           >
             <JournalEditor
