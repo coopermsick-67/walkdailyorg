@@ -13,7 +13,7 @@ const FEATURES = [
     icon: "📖",
     title: "Bible Reader",
     description:
-      "Multiple translations, highlights, audio, and reading plans — all in one beautiful reader.",
+      "Multiple translations, highlights, audio, and reading plans - all in one beautiful reader.",
   },
   {
     icon: "💬",
@@ -279,7 +279,7 @@ export default function LandingPage() {
           </h1>
 
           <p className="text-lg md:text-xl text-white/70 max-w-2xl mx-auto mb-10 leading-relaxed">
-            Read, study, pray, and grow in faith — all for free, forever.
+            Read, study, pray, and grow in faith - all for free, forever.
             Powered by AI to help you go deeper into God&apos;s Word every
             single day.
           </p>
@@ -355,7 +355,7 @@ export default function LandingPage() {
               style={{ color: "var(--text-secondary)" }}
             >
               Six powerful tools designed to help you grow closer to God every
-              day — completely free.
+              day - completely free.
             </p>
           </div>
 

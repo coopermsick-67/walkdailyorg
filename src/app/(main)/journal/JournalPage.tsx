@@ -117,12 +117,11 @@ export default function JournalPage() {
 
       const { data, error } = await client
         .from("journal_entries")
-        .select("*")
+        .select("id, user_id, title, body, mood, verse_tags, is_public, created_at, updated_at")
         .order("created_at", { ascending: false })
         .range(from, to);
 
       if (error) {
-        console.error("Failed to fetch journal entries:", error);
         if (!append) setLoading(false);
         return;
       }
@@ -182,7 +181,7 @@ export default function JournalPage() {
 
         const { data, error } = await client
           .from("journal_entries")
-          .select("*")
+          .select("id, user_id, title, body, mood, verse_tags, is_public, created_at, updated_at")
           .or(`title.ilike.${pattern},body.ilike.${pattern}`)
           .order("created_at", { ascending: false })
           .limit(50);

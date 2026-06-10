@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
-import { BookOpen, Flame, BookMarked, Sparkles, Heart, ChevronRight, Brain } from "lucide-react";
+import { BookOpen, BookMarked, Sparkles, ChevronRight, Brain, PenLine, Heart } from "lucide-react";
+import { Flame } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -44,6 +45,21 @@ function getGreeting(): string {
   if (h < 12) return "morning";
   if (h < 17) return "afternoon";
   return "evening";
+}
+
+/* ------------------------------------------------------------------ */
+/*  Streak milestone badges                                            */
+/* ------------------------------------------------------------------ */
+
+function getStreakBadge(streak: number): { label: string; color: string } | null {
+  if (streak >= 365) return { label: "Year Champion", color: "#c9a227" };
+  if (streak >= 100) return { label: "Centurion", color: "#e8a317" };
+  if (streak >= 60) return { label: "Faithful", color: "#678bd6" };
+  if (streak >= 30) return { label: "Dedicated", color: "#16a34a" };
+  if (streak >= 14) return { label: "Growing", color: "#a78bfa" };
+  if (streak >= 7) return { label: "Week Warrior", color: "#f472b6" };
+  if (streak >= 3) return { label: "Starter", color: "#fb923c" };
+  return null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -191,13 +207,17 @@ export default function HomePage() {
   const greeting = getGreeting();
   const displayName = profile?.display_name || "friend";
   const streak = profile?.streak_count || 0;
+  const badge = getStreakBadge(streak);
 
   return (
-    <div className="flex-1 flex flex-col max-w-3xl mx-auto px-4 py-6 pb-24">
-      {/* Greeting header */}
-      <section className="mb-6">
+    <div className="flex-1 flex flex-col max-w-3xl mx-auto px-4 pb-24">
+      {/* Hero section - constrained to max 35vh */}
+      <section
+        className="mb-4 pt-4"
+        style={{ maxHeight: "35dvh" }}
+      >
         <h1
-          className="text-2xl md:text-3xl font-bold font-heading mb-2"
+          className="text-2xl md:text-3xl font-bold font-heading mb-1"
           style={{ color: "var(--text-primary)" }}
         >
           Good {greeting}, {displayName}.
@@ -205,31 +225,43 @@ export default function HomePage() {
         {loadingProfile ? (
           <div className="skeleton" style={{ width: 120, height: 24, borderRadius: 8 }} />
         ) : streak > 0 ? (
-          <div
-            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold"
-            style={{
-              background: streak >= 3
-                ? "linear-gradient(135deg, rgba(201,162,39,0.15), rgba(201,162,39,0.05))"
-                : "var(--surface-elevated)",
-              color: "var(--color-accent-500)",
-              border: "1px solid rgba(201,162,39,0.25)",
-            }}
-          >
-            <Flame
-              size={18}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold"
               style={{
-                animation: streak >= 3 ? "flame-pulse 2s ease-in-out infinite" : undefined,
+                background: streak >= 3
+                  ? "rgba(251, 146, 60, 0.15)"
+                  : "var(--surface-elevated)",
+                color: streak >= 3 ? "#ea580c" : "var(--color-accent-500)",
+                border: `1px solid ${streak >= 3 ? "rgba(251, 146, 60, 0.3)" : "rgba(201,162,39,0.25)"}`,
               }}
-            />
-            {streak} day{streak !== 1 ? "s" : ""} streak
+            >
+              <Flame
+                size={18}
+                style={{ color: streak >= 3 ? "#ea580c" : "#c9a227" }}
+              />
+              {streak} day{streak !== 1 ? "s" : ""}
+            </div>
+            {badge && (
+              <span
+                className="text-xs font-semibold px-2.5 py-1 rounded-full"
+                style={{
+                  background: `${badge.color}18`,
+                  color: badge.color,
+                  border: `1px solid ${badge.color}40`,
+                }}
+              >
+                {badge.label}
+              </span>
+            )}
           </div>
         ) : null}
       </section>
 
-      {/* 1. Today's Daily Verse */}
-      <section className="mb-6">
+      {/* 1. Today's Daily Verse - prominently placed */}
+      <section className="mb-5">
         <h2
-          className="text-xs font-semibold uppercase tracking-wider mb-3"
+          className="text-xs font-semibold uppercase tracking-wider mb-2"
           style={{ color: "var(--text-muted)" }}
         >
           Today&apos;s Verse
@@ -238,39 +270,49 @@ export default function HomePage() {
           <CardSkeleton />
         ) : dailyVerse ? (
           <div
-            className="rounded-2xl p-6 md:p-8 relative overflow-hidden"
+            className="rounded-2xl p-5 md:p-6 relative overflow-hidden"
             style={{
-              background:
-                "linear-gradient(135deg, var(--color-primary-500), var(--color-primary-700))",
-              boxShadow: "0 8px 32px rgba(26,58,110,0.2)",
+              background: "var(--surface-elevated)",
+              boxShadow: "var(--shadow-md)",
+              border: "1px solid var(--border)",
             }}
           >
             <div
-              className="text-xs font-semibold uppercase tracking-wider mb-3"
-              style={{ color: "rgba(255,255,255,0.6)" }}
+              className="text-xs font-semibold uppercase tracking-wider mb-2"
+              style={{ color: "var(--color-accent-500)" }}
             >
               {dailyVerse.translation}
             </div>
-            <p className="text-white text-lg md:text-xl font-heading leading-relaxed mb-4">
+            <p
+              className="text-base md:text-lg font-heading leading-relaxed mb-3"
+              style={{ color: "var(--text-primary)" }}
+            >
               &ldquo;{dailyVerse.text}&rdquo;
             </p>
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium" style={{ color: "var(--color-accent-400)" }}>
-                {dailyVerse.reference}
+              <p
+                className="text-sm font-semibold"
+                style={{ color: "var(--color-accent-500)" }}
+              >
+                — {dailyVerse.reference}
               </p>
               <Link
                 href="/bible"
-                className="flex items-center gap-1 text-sm font-medium px-3 py-1.5 rounded-lg transition-opacity hover:opacity-80"
-                style={{ color: "#fff", background: "rgba(255,255,255,0.15)" }}
+                className="flex items-center gap-1 text-sm font-medium px-3 py-1.5 rounded-lg transition-all hover:opacity-80"
+                style={{
+                  color: "var(--color-primary-500)",
+                  background: "rgba(26, 58, 110, 0.06)",
+                  minHeight: 44,
+                  minWidth: 44,
+                }}
               >
-                Read in Bible
-                <ChevronRight size={14} />
+                Read <ChevronRight size={14} />
               </Link>
             </div>
           </div>
         ) : (
           <div
-            className="rounded-2xl p-6 text-center"
+            className="rounded-2xl p-5 text-center"
             style={{ background: "var(--surface-card)", border: "1px dashed var(--border)" }}
           >
             <BookOpen size={24} className="mx-auto mb-2" style={{ color: "var(--text-muted)" }} />
@@ -282,9 +324,9 @@ export default function HomePage() {
       </section>
 
       {/* 2. Continue Reading */}
-      <section className="mb-6">
+      <section className="mb-5">
         <h2
-          className="text-xs font-semibold uppercase tracking-wider mb-3"
+          className="text-xs font-semibold uppercase tracking-wider mb-2"
           style={{ color: "var(--text-muted)" }}
         >
           Continue Reading
@@ -302,8 +344,7 @@ export default function HomePage() {
             <div
               className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
               style={{
-                background:
-                  "linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100))",
+                background: "rgba(26, 58, 110, 0.06)",
               }}
             >
               <BookMarked size={24} style={{ color: "var(--color-primary-500)" }} />
@@ -323,7 +364,7 @@ export default function HomePage() {
           </Link>
         ) : !loadingProfile ? (
           <div
-            className="rounded-2xl p-6 text-center"
+            className="rounded-2xl p-5 text-center"
             style={{ background: "var(--surface-card)", border: "1px dashed var(--border)" }}
           >
             <BookMarked size={24} className="mx-auto mb-2" style={{ color: "var(--text-muted)" }} />
@@ -344,9 +385,9 @@ export default function HomePage() {
       </section>
 
       {/* 3. Today's Devotional */}
-      <section className="mb-6">
+      <section className="mb-5">
         <h2
-          className="text-xs font-semibold uppercase tracking-wider mb-3"
+          className="text-xs font-semibold uppercase tracking-wider mb-2"
           style={{ color: "var(--text-muted)" }}
         >
           Today&apos;s Devotional
@@ -363,8 +404,7 @@ export default function HomePage() {
           <div
             className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
             style={{
-              background:
-                "linear-gradient(135deg, rgba(201,162,39,0.1), rgba(201,162,39,0.05))",
+              background: "rgba(201, 162, 39, 0.08)",
             }}
           >
             <Sparkles size={24} style={{ color: "var(--color-accent-500)" }} />
@@ -388,8 +428,8 @@ export default function HomePage() {
       </section>
 
       {/* 4. Community Prayers */}
-      <section className="mb-6">
-        <div className="flex items-center justify-between mb-3">
+      <section className="mb-5">
+        <div className="flex items-center justify-between mb-2">
           <h2
             className="text-xs font-semibold uppercase tracking-wider"
             style={{ color: "var(--text-muted)" }}
@@ -413,12 +453,12 @@ export default function HomePage() {
         ) : prayers.length > 0 ? (
           <div className="space-y-3">
             {prayers.map((prayer) => (
-              <CommunityPrayerCard key={prayer.id} prayer={prayer} />
+              <CommunityPrayerCard key={prayer.id} prayer={prayer} onPray={() => toastSuccess("You prayed for this request")} />
             ))}
           </div>
         ) : (
           <div
-            className="rounded-2xl p-6 text-center"
+            className="rounded-2xl p-5 text-center"
             style={{ background: "var(--surface-card)", border: "1px dashed var(--border)" }}
           >
             <Heart size={24} className="mx-auto mb-2" style={{ color: "var(--text-muted)" }} />
@@ -430,9 +470,9 @@ export default function HomePage() {
       </section>
 
       {/* 5. Verse to Memorize */}
-      <section className="mb-6">
+      <section className="mb-5">
         <h2
-          className="text-xs font-semibold uppercase tracking-wider mb-3"
+          className="text-xs font-semibold uppercase tracking-wider mb-2"
           style={{ color: "var(--text-muted)" }}
         >
           Verse to Memorize
@@ -448,12 +488,13 @@ export default function HomePage() {
             ))}
             <Link
               href="/memorize"
-              className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl text-sm font-semibold transition-colors hover:opacity-80"
+              className="flex items-center justify-center gap-2 w-full rounded-2xl text-sm font-semibold transition-colors hover:opacity-80"
               style={{
                 background: "var(--surface-card)",
                 border: "1px dashed var(--border)",
                 color: "var(--color-primary-500)",
                 minHeight: 44,
+                padding: "12px 16px",
               }}
             >
               <Brain size={16} />
@@ -462,7 +503,7 @@ export default function HomePage() {
           </div>
         ) : (
           <div
-            className="rounded-2xl p-6 text-center"
+            className="rounded-2xl p-5 text-center"
             style={{ background: "var(--surface-card)", border: "1px dashed var(--border)" }}
           >
             <Brain size={24} className="mx-auto mb-2" style={{ color: "var(--text-muted)" }} />
@@ -483,51 +524,55 @@ export default function HomePage() {
 /*  Community Prayer Card                                             */
 /* ------------------------------------------------------------------ */
 
-function CommunityPrayerCard({ prayer }: { prayer: PrayerSummary }) {
-  const { success } = useToast();
-
-  const handlePray = () => {
-    success("You prayed for this request");
-  };
-
+function CommunityPrayerCard({ prayer, onPray }: { prayer: PrayerSummary; onPray: () => void }) {
   return (
     <div
-      className="rounded-2xl p-4 flex items-center gap-3"
+      className="rounded-2xl p-4"
       style={{
         background: "var(--surface-card)",
         boxShadow: "var(--shadow-sm)",
         border: "1px solid var(--border)",
       }}
     >
-      <div
-        className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white text-sm font-bold"
-        style={{ background: "var(--color-primary-500)" }}
-      >
-        {prayer.author_name[0].toUpperCase()}
-      </div>
-      <Link href={`/prayer-wall/${prayer.id}`} className="flex-1 min-w-0">
-        <p
-          className="text-sm font-medium truncate"
-          style={{ color: "var(--text-primary)" }}
+      <div className="flex items-center gap-3 mb-2">
+        <div
+          className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold"
+          style={{ background: "var(--color-primary-500)", color: "#fff" }}
         >
-          {prayer.title}
-        </p>
-        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-          {prayer.author_name}
-        </p>
-      </Link>
-      <button
-        onClick={handlePray}
-        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-opacity hover:opacity-80"
-        style={{
-          background: "rgba(201,162,39,0.1)",
-          color: "var(--color-accent-500)",
-          minHeight: 44,
-        }}
-      >
-        <Heart size={14} />
-        Pray
-      </button>
+          {prayer.author_name[0].toUpperCase()}
+        </div>
+        <Link href={`/prayer-wall/${prayer.id}`} className="flex-1 min-w-0">
+          <p
+            className="text-sm font-medium truncate"
+            style={{ color: "var(--text-primary)" }}
+          >
+            {prayer.title}
+          </p>
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            {prayer.author_name}
+          </p>
+        </Link>
+      </div>
+      <div className="flex justify-end">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onPray();
+          }}
+          className="flex items-center gap-1.5 rounded-xl text-sm font-semibold transition-all hover:scale-105 active:scale-95"
+          style={{
+            background: "rgba(201, 162, 39, 0.1)",
+            color: "var(--color-accent-500)",
+            minHeight: 44,
+            minWidth: 44,
+            padding: "8px 16px",
+          }}
+          aria-label={`Pray for ${prayer.title}`}
+        >
+          <PenLine size={16} />
+          Pray
+        </button>
+      </div>
     </div>
   );
 }
@@ -550,8 +595,7 @@ function MemoryCardPreview({ card }: { card: MemoryCard }) {
       <div
         className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
         style={{
-          background:
-            "linear-gradient(135deg, var(--color-primary-50), var(--color-primary-100))",
+          background: "rgba(26, 58, 110, 0.06)",
         }}
       >
         <Brain size={24} style={{ color: "var(--color-primary-500)" }} />
@@ -574,7 +618,7 @@ function MemoryCardPreview({ card }: { card: MemoryCard }) {
       </div>
       <span
         className="text-xs font-semibold px-3 py-1.5 rounded-lg flex-shrink-0"
-        style={{ background: "rgba(201,162,39,0.1)", color: "var(--color-accent-500)" }}
+        style={{ background: "rgba(201, 162, 39, 0.08)", color: "var(--color-accent-500)" }}
       >
         Practice
       </span>

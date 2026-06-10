@@ -85,7 +85,7 @@ export default function VerseActions({
   }, [verse.reference]);
 
   const copyVerse = async () => {
-    const text = `"${verse.text}" -- ${verse.reference}`;
+    const text = `"${verse.text}" — ${verse.reference} (NIV)`;
     try {
       await navigator.clipboard.writeText(text);
     } catch {
@@ -100,7 +100,7 @@ export default function VerseActions({
   };
 
   const shareVerse = async () => {
-    const text = `"${verse.text}" -- ${verse.reference}`;
+    const text = `"${verse.text}" — ${verse.reference} (NIV)`;
     if (navigator.share) {
       try {
         await navigator.share({ text, title: verse.reference });

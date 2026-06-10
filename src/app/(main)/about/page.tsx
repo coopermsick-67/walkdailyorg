@@ -15,7 +15,7 @@ export default function AboutPage() {
       <div className="space-y-6 text-base leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
         <p>
           Walk Daily is a free, AI-powered Christian app designed to help you read the Bible,
-          pray, journal, and grow in your faith — every single day.
+          pray, journal, and grow in your faith - every single day.
         </p>
 
         <p>
@@ -58,7 +58,7 @@ export default function AboutPage() {
         </p>
 
         <p className="pt-8 text-sm" style={{ color: 'var(--text-faint)' }}>
-          Walk Daily v1.0.0 — Made with love for the Church.
+          Walk Daily v1.0.0 - Made with love for the Church.
         </p>
       </div>
     </div>

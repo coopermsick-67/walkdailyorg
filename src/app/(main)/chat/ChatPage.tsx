@@ -67,7 +67,7 @@ function getPersonalizedPrompts(profile: UserProfile): PersonalizedPrompt[] {
     sharing: {
       icon: <Share2 size={18} />,
       label: "Give me courage to share my faith",
-      topic: "Give me courage to share my faith with others. I feel anxious about talking about Jesus with people around me — how can I overcome this fear?",
+      topic: "Give me courage to share my faith with others. I feel anxious about talking about Jesus with people around me - how can I overcome this fear?",
     },
   };
 
@@ -76,12 +76,12 @@ function getPersonalizedPrompts(profile: UserProfile): PersonalizedPrompt[] {
     {
       icon: <Sparkles size={18} />,
       label: "Give me a devotional for today",
-      topic: "Give me a devotional for today — include a Scripture reading, reflection, and prayer prompt.",
+      topic: "Give me a devotional for today - include a Scripture reading, reflection, and prayer prompt.",
     },
     {
       icon: <BookOpen size={18} />,
       label: "Help me understand the Book of Romans",
-      topic: "Help me understand the Book of Romans — its main themes, key passages, and significance for Christians today.",
+      topic: "Help me understand the Book of Romans - its main themes, key passages, and significance for Christians today.",
     },
     {
       icon: <Heart size={18} />,
@@ -336,14 +336,55 @@ export default function ChatPage() {
   );
 
   const handleSaveToJournal = useCallback(
-    (content: string) => {
-      navigator.clipboard.writeText(content).then(() => {
-        success("Message copied — paste it into your journal!");
-      }).catch(() => {
-        toastError("Couldn't copy to clipboard");
-      });
+    async (content: string) => {
+      try {
+        const client = createClient();
+        const { data: { user } } = await client.auth.getUser();
+        if (!user) {
+          toastError("Please sign in to save to journal");
+          return;
+        }
+
+        // Find the preceding user message for context
+        const assistantIdx = messages.findLastIndex(
+          (m) => m.role === "assistant" && m.content === content
+        );
+        let userContext = "";
+        if (assistantIdx > 0) {
+          const prevUser = messages
+            .slice(0, assistantIdx)
+            .reverse()
+            .find((m) => m.role === "user");
+          if (prevUser) userContext = prevUser.content;
+        }
+
+        const title = userContext
+          ? userContext.length > 60
+            ? userContext.slice(0, 60) + "..."
+            : userContext
+          : "AI Faith Chat";
+
+        const entryContent = userContext
+          ? `**Question:** ${userContext}\n\n**AI Response:**\n\n${content}`
+          : content;
+
+        const { error } = await client.from("journal_entries").insert({
+          user_id: user.id,
+          title,
+          content: entryContent,
+          ai_generated: true,
+        });
+
+        if (error) throw error;
+
+        success("Saved to journal!");
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : "Failed to save to journal";
+        toastError(message);
+      }
     },
-    [success, toastError],
+    [messages, success, toastError],
   );
 
   const handleClearHistory = useCallback(async () => {

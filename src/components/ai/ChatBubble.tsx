@@ -8,7 +8,6 @@ import {
   Copy,
   BookOpen,
   Check,
-  MoreHorizontal,
 } from "lucide-react";
 
 interface ChatBubbleProps {
@@ -50,26 +49,39 @@ export default function ChatBubble({
 
   return (
     <div
-      className={`flex ${isUser ? "justify-end" : "justify-start"} group`}
+      className={`flex ${isUser ? "justify-end" : "justify-start"} group animate-fade-in-up`}
       role="article"
       aria-label={`${message.role} message`}
     >
+      {/* AI avatar */}
+      {!isUser && (
+        <div
+          className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold mr-2 mt-1"
+          style={{
+            background: "var(--color-accent-500)",
+            color: "#1a1a2e",
+          }}
+          aria-hidden="true"
+        >
+          AI
+        </div>
+      )}
       <div
-        className={`relative max-w-[85%] md:max-w-[75%] rounded-2xl px-4 py-3 transition-all duration-200 ${
+        className={`relative max-w-[85%] md:max-w-[70%] rounded-2xl px-4 py-3 ${
           isUser
             ? "rounded-br-sm"
             : "rounded-bl-sm"
         }`}
         style={{
           background: isUser
-            ? "linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))"
-            : "var(--surface-card)",
+            ? "var(--color-primary-500)"
+            : "var(--surface-elevated)",
           color: isUser ? "#ffffff" : "var(--text-primary)",
           boxShadow: isUser
-            ? "0 2px 12px rgba(26,58,110,0.2)"
+            ? "0 2px 12px rgba(26,58,110,0.15)"
             : "var(--shadow-sm)",
           border: isUser
-            ? "none"
+            ? "1px solid rgba(255,255,255,0.1)"
             : "1px solid var(--border)",
         }}
       >
@@ -269,11 +281,3 @@ function splitByVerseRefs(text: string) {
   return result.length > 0 ? result : [{ text, isRef: false }];
 }
 
-/* ------------------------------------------------------------------ */
-/*  Removed unused component                                           */
-/* ------------------------------------------------------------------ */
-
-// ChatMessage is not used — kept for future if needed
-export function ChatMessage() {
-  return null;
-}

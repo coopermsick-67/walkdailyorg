@@ -53,6 +53,7 @@ type CommentCountRow = {
 
 const PAGE_SIZE = 20;
 const PRAYED_KEY = "walkdaily_prayed";
+const PRAY_DEBOUNCE_SECONDS = 5; // 5-second cooldown per prayer (Issue 29)
 const PRAY_TIMER_SECONDS = 30;
 
 function getPrayedSet(): Set<string> {
@@ -98,11 +99,19 @@ export default function PrayerWallPage() {
   const { success, error: toastError } = useToast();
 
   const [prayers, setPrayers] = useState<PrayerRequest[]>([]);
+  const [answeredPrayers, setAnsweredPrayers] = useState<PrayerRequest[]>([]);
+  const [showAnswered, setShowAnswered] = useState(false);
+  const [answeredLoading, setAnsweredLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(0);
-  const [prayedSet, setPrayedSet] = useState<Set<string>>(new Set());
+  // Time-based pray debounce (Issue 29): prayer ID -> timestamp last prayed
+  const prayedTimestampsRef = useRef<Map<string, number>>(new Map());
+  const [, forceUpdate] = useState(0);
+
+  // Current user for ownership checks (Issue 36)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
@@ -157,7 +166,6 @@ export default function PrayerWallPage() {
         .range(from, to);
 
       if (error) {
-        console.error("Failed to fetch prayers:", error);
         if (!append) setLoading(false);
         return;
       }
@@ -193,9 +201,42 @@ export default function PrayerWallPage() {
     [],
   );
 
+  /* ---- Fetch answered prayers (Issue 37) ---- */
+  const fetchAnsweredPrayers = useCallback(async () => {
+    setAnsweredLoading(true);
+    const client = createClient();
+    const { data, error } = await client
+      .from("prayer_requests")
+      .select(
+        `
+        id, user_id, title, body, is_anonymous, is_answered,
+        pray_count, flag_count, created_at,
+        profiles:user_id ( display_name, avatar_url )
+      `,
+      )
+      .eq("is_answered", true)
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (!error && data) {
+      const mapped: PrayerRequest[] = ((data || []) as unknown as PrayerRow[]).map((row) => ({
+        ...row,
+        profiles: row.profiles ?? null,
+        comment_count: 0,
+      }));
+      setAnsweredPrayers(mapped);
+    }
+    setAnsweredLoading(false);
+  }, []);
+
   useEffect(() => {
     fetchPrayers(0, false);
-    setPrayedSet(getPrayedSet());
+    // Load current user for ownership checks (Issue 36)
+    (async () => {
+      const client = createClient();
+      const { data: { user } } = await client.auth.getUser();
+      if (user) setCurrentUserId(user.id);
+    })();
   }, [fetchPrayers]);
 
   /* ---- Realtime subscription ---- */
@@ -385,11 +426,15 @@ export default function PrayerWallPage() {
 
   const handlePrayWithTimer = useCallback(
     async (prayerId: string) => {
-      if (prayedSet.has(prayerId) || pendingSetRef.current.has(prayerId) || timerPrayerId) return;
+      // Check time-based debounce (Issue 29)
+      const lastPrayed = prayedTimestampsRef.current.get(prayerId);
+      const now = Date.now();
+      if (lastPrayed && now - lastPrayed < PRAY_DEBOUNCE_SECONDS * 1000) return;
+      if (pendingSetRef.current.has(prayerId) || timerPrayerId) return;
 
       pendingSetRef.current.add(prayerId);
-      markPrayed(prayerId);
-      setPrayedSet(new Set([...prayedSet, prayerId]));
+      prayedTimestampsRef.current.set(prayerId, now);
+      forceUpdate((n) => n + 1);
       setTimerPrayerId(prayerId);
       setTimerCount(PRAY_TIMER_SECONDS);
 
@@ -409,7 +454,7 @@ export default function PrayerWallPage() {
         });
       }, 1000);
     },
-    [prayedSet, timerPrayerId, completePrayer],
+    [prayedTimestampsRef.current, timerPrayerId, completePrayer],
   );
 
   const handleFlag = async (prayerId: string) => {
@@ -521,6 +566,36 @@ export default function PrayerWallPage() {
         </div>
       </div>
 
+      {/* Community Guidelines (Issue 35) */}
+      <div
+        className="rounded-2xl p-4 mb-4"
+        style={{
+          background: "rgba(201, 162, 39, 0.06)",
+          border: "1px solid rgba(201, 162, 39, 0.15)",
+        }}
+      >
+        <p
+          className="text-xs font-semibold uppercase tracking-wider mb-2"
+          style={{ color: "var(--color-accent-500)" }}
+        >
+          Community Guidelines
+        </p>
+        <ul className="space-y-1">
+          <li className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            Be respectful and supportive. We are here to lift each other up in Christ.
+          </li>
+          <li className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            Do not share personal information (yours or others) in prayer requests.
+          </li>
+          <li className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            Flag inappropriate content. Posts with 5+ flags are automatically hidden.
+          </li>
+          <li className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            This is a faith community. Keep posts aligned with Christian values.
+          </li>
+        </ul>
+      </div>
+
       {/* Prayer list */}
       {prayerList.length === 0 && !loading ? (
         <EmptyState
@@ -542,7 +617,7 @@ export default function PrayerWallPage() {
             <PrayerCard
               key={prayer.id}
               prayer={prayer}
-              hasPrayed={prayedSet.has(prayer.id)}
+              hasPrayed={prayedTimestampsRef.current.has(prayer.id)}
               isPraying={pendingSetRef.current.has(prayer.id)}
               prayAnimKey={prayAnimKey[prayer.id] || 0}
               isTimerActive={timerPrayerId === prayer.id}
@@ -550,6 +625,7 @@ export default function PrayerWallPage() {
               onPray={handlePrayWithTimer}
               onFlag={handleFlag}
               onDelete={(id) => setDeleteConfirmId(id)}
+              currentUserId={currentUserId}
             />
           ))}
         </div>
@@ -567,6 +643,104 @@ export default function PrayerWallPage() {
           </div>
         </div>
       )}
+
+      {/* Answered Prayers Section (Issue 37) */}
+      <div className="mt-8 mb-6">
+        <button
+          onClick={() => {
+            setShowAnswered(!showAnswered);
+            if (!showAnswered && answeredPrayers.length === 0) {
+              fetchAnsweredPrayers();
+            }
+          }}
+          className="flex items-center gap-2 w-full py-3 px-4 rounded-2xl text-sm font-semibold transition-colors"
+          style={{
+            background: "rgba(201, 162, 39, 0.08)",
+            border: "1px solid rgba(201, 162, 39, 0.2)",
+            color: "var(--color-accent-500)",
+            minHeight: 44,
+          }}
+        >
+          <span>🎉</span>
+          {showAnswered ? "Hide" : "Show"} Answered Prayers
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{
+              marginLeft: "auto",
+              transform: showAnswered ? "rotate(180deg)" : "rotate(0deg)",
+              transition: "transform 0.2s ease",
+            }}
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+
+        {showAnswered && (
+          <div className="mt-4 space-y-3">
+            {answeredLoading ? (
+              <div className="py-6 text-center text-sm" style={{ color: "var(--text-muted)" }}>
+                Loading answered prayers...
+              </div>
+            ) : answeredPrayers.length === 0 ? (
+              <div
+                className="rounded-2xl p-6 text-center"
+                style={{ background: "var(--surface-card)", border: "1px dashed var(--border)" }}
+              >
+                <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                  No answered prayers yet. Keep praying — God is faithful!
+                </p>
+              </div>
+            ) : (
+              answeredPrayers.map((prayer) => (
+                <div
+                  key={prayer.id}
+                  className="rounded-2xl p-4 relative overflow-hidden"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(201,162,39,0.08), rgba(26,58,110,0.05))",
+                    border: "1px solid rgba(201, 162, 39, 0.2)",
+                  }}
+                >
+                  {/* Celebration badge */}
+                  <div
+                    className="absolute top-3 right-3 flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold"
+                    style={{
+                      background: "rgba(201, 162, 39, 0.15)",
+                      color: "var(--color-accent-500)",
+                    }}
+                  >
+                    <span>✨</span> Answered
+                  </div>
+                  <h4
+                    className="font-semibold text-sm font-heading pr-20"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    {prayer.title}
+                  </h4>
+                  <p
+                    className="text-xs mt-1 line-clamp-2"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
+                    {prayer.body.length > 100 ? prayer.body.slice(0, 100) + "..." : prayer.body}
+                  </p>
+                  <p
+                    className="text-xs mt-2 font-medium"
+                    style={{ color: "var(--color-accent-500)" }}
+                  >
+                    {prayer.is_anonymous ? "Anonymous" : prayer.profiles?.[0]?.display_name || "ABrother"} • {timeAgo(prayer.created_at)}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
 
       {/* FAB */}
       <button
@@ -847,6 +1021,7 @@ function PrayerCard({
   onPray,
   onFlag,
   onDelete,
+  currentUserId,
 }: {
   prayer: PrayerRequest;
   hasPrayed: boolean;
@@ -857,6 +1032,7 @@ function PrayerCard({
   onPray: (id: string) => void;
   onFlag: (id: string) => void;
   onDelete: (id: string) => void;
+  currentUserId: string | null;
 }) {
   const [showMenu, setShowMenu] = useState(false);
   const authorName = prayer.is_anonymous
@@ -866,6 +1042,8 @@ function PrayerCard({
     prayer.body.length > 120
       ? prayer.body.slice(0, 120) + "..."
       : prayer.body;
+  // Only show delete for the prayer owner (Issue 36)
+  const isOwner = currentUserId !== null && currentUserId === prayer.user_id;
 
   return (
     <Link href={`/prayer-wall/${prayer.id}`}>
@@ -946,19 +1124,21 @@ function PrayerCard({
             >
               Flag as inappropriate
             </button>
-            <button
-              onClick={() => {
-                onDelete(prayer.id);
-                setShowMenu(false);
-              }}
-              className="w-full text-left px-4 py-2.5 text-sm rounded-lg"
-              style={{
-                color: "var(--error-bg)",
-                minHeight: 44,
-              }}
-            >
-              Delete prayer request
-            </button>
+            {isOwner && (
+              <button
+                onClick={() => {
+                  onDelete(prayer.id);
+                  setShowMenu(false);
+                }}
+                className="w-full text-left px-4 py-2.5 text-sm rounded-lg"
+                style={{
+                  color: "var(--error-bg)",
+                  minHeight: 44,
+                }}
+              >
+                Delete prayer request
+              </button>
+            )}
           </div>
         )}
 
@@ -1019,12 +1199,8 @@ function PrayerCard({
             <span
               key={`pray-count-${prayer.id}-${prayAnimKey}`}
               style={{
-                background: hasPrayed
-                  ? "linear-gradient(90deg, var(--color-accent-400), var(--color-accent-600))"
-                  : "none",
-                WebkitBackgroundClip: hasPrayed ? "text" : undefined,
-                WebkitTextFillColor: hasPrayed ? "transparent" : undefined,
-                backgroundClip: hasPrayed ? "text" : undefined,
+                color: hasPrayed ? "var(--color-accent-500)" : "var(--text-muted)",
+                fontWeight: hasPrayed ? 600 : 500,
                 animation: prayAnimKey > 0 ? "pray-pulse 0.6s ease-out" : undefined,
               }}
             >

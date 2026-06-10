@@ -73,14 +73,14 @@ export default function ProfilePage() {
       // Count verses read (distinct chapters from reading_progress)
       const { count: readCount } = await createClient()
         .from("reading_progress")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("user_id", user.id);
       setVersesRead(readCount || 0);
 
       // Count prayers posted
       const { count: prayerCount } = await createClient()
         .from("prayer_requests")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("user_id", user.id);
       setPrayersPosted(prayerCount || 0);
 

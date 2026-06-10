@@ -35,7 +35,7 @@ export default async function AdminPage() {
   // Load waitlist
   const { data: wlData } = await supabase
     .from("waitlist")
-    .select("*")
+    .select("id, email, name, source, invited, created_at")
     .order("created_at", { ascending: false })
     .limit(100);
 

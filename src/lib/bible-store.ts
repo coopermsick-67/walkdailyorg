@@ -89,7 +89,8 @@ export const useBibleStore = create<BibleState>((set, get) => ({
   navigateTo: async (book: BibleBook, chapter: number) => {
     const bibleId = get().currentBibleId;
     const chapterId = `${book.id}.${chapter}`;
-    set({ isLoading: true, error: null, currentBook: book, currentChapterId: chapterId, currentChapterVerses: [] });
+    // Keep existing verses while loading to prevent white flash (Issue 14)
+    set({ isLoading: true, error: null, currentBook: book, currentChapterId: chapterId });
 
     try {
       // Try cache first
@@ -100,16 +101,22 @@ export const useBibleStore = create<BibleState>((set, get) => ({
 
       // Fetch fresh data
       const verses = await getChapterVerses(bibleId, chapterId);
-      set({ currentChapterVerses: verses, isLoading: false });
-
-      // Cache for offline
       if (verses.length > 0) {
+        set({ currentChapterVerses: verses, isLoading: false });
+        // Cache for offline
         cacheChapter(bibleId, chapterId, verses);
+      } else if (!cached || cached.verses.length === 0) {
+        // Only clear verses if we got empty results and had no cache
+        set({ currentChapterVerses: [], isLoading: false });
       }
     } catch (err) {
+      // On error, keep old verses if we have them; only set error
+      const currentVerses = get().currentChapterVerses;
       set({
         error: err instanceof Error ? err.message : "Failed to load chapter",
         isLoading: false,
+        // Clear verses only if we had none before
+        currentChapterVerses: currentVerses.length > 0 ? currentVerses : [],
       });
     }
   },
@@ -284,7 +291,7 @@ export const useBibleStore = create<BibleState>((set, get) => ({
 
     const { data } = await supabase
       .from("verse_marks")
-      .select("*")
+      .select("id, user_id, reference, verse_text, bible_id, mark_type, color, created_at")
       .eq("user_id", user.id)
       .eq("mark_type", "bookmark");
 
@@ -324,7 +331,7 @@ export const useBibleStore = create<BibleState>((set, get) => ({
 
     const { data } = await supabase
       .from("verse_marks")
-      .select("*")
+      .select("id, user_id, reference, verse_text, bible_id, mark_type, color, created_at")
       .eq("user_id", user.id)
       .eq("mark_type", "highlight");
 
@@ -364,7 +371,7 @@ export const useBibleStore = create<BibleState>((set, get) => ({
 
       const { data } = await supabase
         .from("daily_verses")
-        .select("*")
+        .select("date, reference, verse_text, translation")
         .eq("date", today)
         .single();
 

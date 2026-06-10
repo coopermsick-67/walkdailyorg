@@ -58,7 +58,7 @@ const POPULAR_VERSES = [
   { ref: "Proverbs 3:5-6", text: "Trust in the Lord with all your heart and lean not on your own understanding; in all your ways submit to him, and he will make your paths straight." },
   { ref: "Psalm 23:1", text: "The Lord is my shepherd, I lack nothing." },
   { ref: "Isaiah 41:10", text: "So do not fear, for I am with you; do not be dismayed, for I am your God. I will strengthen you and help you." },
-  { ref: "Ephesians 2:8", text: "For it is by grace you have been saved, through faith — and this is not from yourselves, it is the gift of God." },
+  { ref: "Ephesians 2:8", text: "For it is by grace you have been saved, through faith - and this is not from yourselves, it is the gift of God." },
 ];
 
 interface VersePickerProps {
@@ -461,7 +461,7 @@ export default function MemorizePage() {
     );
 
     success(
-      `Quiz complete! Score: ${score}% — ${score >= 80 ? "Great job! Interval increased." : "Keep practicing! Back to daily reviews."}`,
+      `Quiz complete! Score: ${score}% - ${score >= 80 ? "Great job! Interval increased." : "Keep practicing! Back to daily reviews."}`,
     );
   }, [activeCard, quizResults, supabase, success]);
 

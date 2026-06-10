@@ -3,6 +3,12 @@ import { createAuthenticatedClient } from "@/lib/supabase/server";
 import type { AIRequest, AIStreamPayload } from "@/types/ai";
 
 /* ------------------------------------------------------------------ */
+/*  Runtime                                                            */
+/* ------------------------------------------------------------------ */
+
+export const runtime = "edge";
+
+/* ------------------------------------------------------------------ */
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -458,7 +464,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Internal server error";
-    console.error("AI route error:", err);
     return NextResponse.json(
       { error: message },
       { status: 500 },

@@ -74,7 +74,7 @@ export default function SignupPage() {
           .eq("id", authData.user.id);
 
         if (profileError) {
-          console.error("Profile update error:", profileError);
+          // Profile update failed; non-critical, user can update later
         }
       }
 

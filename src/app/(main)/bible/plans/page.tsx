@@ -89,8 +89,8 @@ function generateReadingDays(planId: string): ReadingDay[] {
         reference: i % 2 === 1 ? `Psalm ${psalm}` : `Proverbs ${proverbDay}`,
         description:
           i % 2 === 1
-            ? `Psalm ${psalm} — Worship & Prayer`
-            : `Proverbs ${proverbDay} — Wisdom for Daily Living`,
+            ? `Psalm ${psalm} - Worship and Prayer`
+            : `Proverbs ${proverbDay} - Wisdom for Daily Living`,
         completed: false,
       });
     }

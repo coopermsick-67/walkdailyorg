@@ -79,13 +79,25 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <ThemeProvider>
           <ToastProvider>
+            {/* Skip navigation link for keyboard users */}
+            <a
+              href="#main-content"
+              className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[9999] focus:px-4 focus:py-2 focus:rounded-lg focus:text-sm focus:font-semibold"
+              style={{
+                background: "var(--color-primary-500)",
+                color: "#fff",
+              }}
+            >
+              Skip to main content
+            </a>
+
             {/* Desktop top nav */}
             <TopNav />
             {/* Mobile top bar */}
             <MobileTopBar />
 
             {/* Main content area */}
-            <main className="flex-1 flex flex-col pb-20 md:pb-0">
+            <main id="main-content" className="flex-1 flex flex-col pb-20 md:pb-0" tabIndex={-1}>
               {children}
             </main>
 

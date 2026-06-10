@@ -26,14 +26,14 @@ function getReadingPlan(journey: string): {
   switch (journey) {
     case "exploring":
       return {
-        name: "John & Mark — Who is Jesus?",
+        name: "John and Mark - Who is Jesus?",
         desc: "Start with the Gospels to discover who Jesus is. 40 days of approachable readings.",
         duration: "40 days",
       };
     case "new":
       return {
         name: "New Believer Foundations",
-        desc: "Essential passages to build a strong faith foundation. Key verses from both Testaments.",
+        desc: "Essential passages to build a strong faith foundation. Key verses from both the Old and New Testaments.",
         duration: "60 days",
       };
     case "seasoned":

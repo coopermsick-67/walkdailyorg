@@ -1,6 +1,6 @@
 const BIBLE_API_URL = "https://rest.api.bible";
 const BIBLE_API_KEY =
-  process.env.NEXT_PUBLIC_BIBLE_API_KEY || "Q4nMcT296i-hmL9X-L61G";
+  process.env.NEXT_PUBLIC_BIBLE_API_KEY;
 
 export type BibleTranslation = {
   id: string;
@@ -27,6 +27,7 @@ export type BibleVerse = {
   verse: string;
   text: string;
   reference: string;
+  translation?: string;
 };
 
 export type SearchResult = {
@@ -56,6 +57,10 @@ async function request<T>(
     for (const [k, v] of Object.entries(params)) {
       if (v !== undefined) url.searchParams.set(k, v);
     }
+  }
+
+  if (!BIBLE_API_KEY) {
+    throw new Error("Bible API key is not configured. Set NEXT_PUBLIC_BIBLE_API_KEY.");
   }
 
   const res = await fetch(url.toString(), {

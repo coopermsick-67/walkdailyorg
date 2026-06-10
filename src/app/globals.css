@@ -42,8 +42,8 @@
 :root {
   --bg: var(--color-bg-light);
   --surface: var(--color-surface-light);
-  --surface-elevated: #ffffff;
-  --surface-card: #ffffff;
+  --surface-elevated: #f5f4f0;
+  --surface-card: #f5f4f0;
   --text-primary: #1a1a2e;
   --text-secondary: #5a5a72;
   --text-muted: #8a8a9e;
@@ -54,7 +54,7 @@
   --shadow-lg: 0 8px 24px rgba(26, 58, 110, 0.12);
   --nav-bg: rgba(253, 252, 248, 0.92);
   --nav-border: rgba(26, 58, 110, 0.08);
-  --input-bg: #ffffff;
+  --input-bg: #f5f4f0;
   --input-border: #d4d2cc;
   --skeleton-base: #f0eeea;
   --skeleton-shine: #f8f6f2;
@@ -357,6 +357,29 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* ============================================
+   Respect Reduced Motion Preferences
+   ============================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .skeleton {
+    animation: none !important;
+  }
+
+  .confetti-piece {
+    animation: none !important;
+    display: none !important;
+  }
+}
+
+/* ============================================
    AI Chat Animations
    ============================================ */
 
@@ -424,7 +447,7 @@ h1, h2, h3, h4, h5, h6 {
   top: -10px;
   width: 8px;
   height: 8px;
-  animation: confetti-fall 1s ease-out forwards;
+  animation: confetti-fall 1.2s ease-out forwards;
   z-index: 9999;
   pointer-events: none;
 }
@@ -435,6 +458,13 @@ h1, h2, h3, h4, h5, h6 {
 
 .reading-mode-body {
   background: #fdfcf8 !important;
+}
+
+/* Hide BottomNav in reading mode (Issue 15).
+   The BottomNav is the last <nav> child of <body>; hide it when
+   .reading-mode-body exists anywhere in the document.  */
+body:has(.reading-mode-body) nav[aria-label="Main navigation"] {
+  display: none !important;
 }
 
 [data-theme="dark"] .reading-mode-body {
@@ -516,4 +546,19 @@ h1, h2, h3, h4, h5, h6 {
 
 [data-theme="dark"] .devotional-gradient {
   background: linear-gradient(135deg, #162440 0%, #2a1f44 30%, #3e2a0e 60%, #4a2a14 100%);
+}
+
+/* ============================================
+   Reduced Motion
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

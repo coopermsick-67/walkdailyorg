@@ -30,19 +30,19 @@
       "name": "Daily Verse",
       "short_name": "Verse",
       "url": "/bible",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icon.svg", "sizes": "192x192", "type": "image/svg+xml" }]
     },
     {
       "name": "Prayer Wall",
       "short_name": "Prayer",
       "url": "/prayer",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icon.svg", "sizes": "192x192", "type": "image/svg+xml" }]
     },
     {
       "name": "My Journal",
       "short_name": "Journal",
       "url": "/journal",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icon.svg", "sizes": "192x192", "type": "image/svg+xml" }]
     }
   ]
 }

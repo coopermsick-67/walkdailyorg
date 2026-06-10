@@ -92,7 +92,6 @@ export default function SubscriptionsPage() {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("Failed to fetch subscriptions:", error);
       setLoading(false);
       return;
     }

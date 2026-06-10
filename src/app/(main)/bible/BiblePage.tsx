@@ -13,6 +13,7 @@ import DailyVerseCard from "@/components/bible/DailyVerseCard";
 import CrossReferences from "@/components/bible/CrossReferences";
 import { BibleVerseSkeleton } from "@/components/ui/Skeletons";
 import { useToast } from "@/components/ui/Toast";
+import { createClient } from "@/lib/supabase/client";
 import {
   ArrowLeft,
   ChevronLeft,
@@ -117,6 +118,15 @@ export default function BiblePage() {
     chapterCompleteFiredRef.current = null;
   }, [currentChapterId]);
 
+  // Save reading progress when chapter loads (Issue 11)
+  useEffect(() => {
+    if (currentBook && currentChapterId && currentChapterVerses.length > 0) {
+      const parts = currentChapterId.split(".");
+      const chapterNum = parseInt(parts[1], 10);
+      saveReadingProgress(currentBook.name, chapterNum);
+    }
+  }, [currentBook, currentChapterId, currentChapterVerses.length]);
+
   // Handle scroll-to-bottom detection for chapter completion
   const handleReadingScroll = useCallback(() => {
     if (!readingRef.current || chapterComplete) return;
@@ -215,6 +225,40 @@ export default function BiblePage() {
   const handleSearchResult = useCallback(
     (verse: BibleVerse) => {
       setSelectedVerse(verse);
+    },
+    [],
+  );
+
+  // Save reading progress to Supabase (Issue 11)
+  const saveReadingProgress = useCallback(
+    async (bookName: string, chapter: number) => {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // Upsert reading progress
+        await supabase.from("reading_progress").upsert(
+          {
+            user_id: user.id,
+            book: bookName,
+            chapter,
+            last_read_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,book,chapter" }
+        );
+
+        // Also update profile's current reading position
+        await supabase
+          .from("profiles")
+          .update({
+            current_reading_book: bookName,
+            current_reading_chapter: chapter,
+          })
+          .eq("id", user.id);
+      } catch {
+        // Non-critical: reading progress save failure should not disrupt reading
+      }
     },
     [],
   );

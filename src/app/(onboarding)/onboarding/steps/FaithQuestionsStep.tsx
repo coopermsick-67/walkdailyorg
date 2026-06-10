@@ -52,11 +52,11 @@ const CHALLENGE_OPTIONS = [
 ];
 
 const TRANSLATION_OPTIONS = [
-  { value: "ESV", label: "ESV", desc: "English Standard Version — word-for-word accuracy" },
-  { value: "NIV", label: "NIV", desc: "New International Version — balanced readability" },
-  { value: "KJV", label: "KJV", desc: "King James Version — classic, poetic language" },
-  { value: "NLT", label: "NLT", desc: "New Living Translation — easy to understand" },
-  { value: "NASB", label: "NASB", desc: "New American Standard — literal precision" },
+  { value: "ESV", label: "ESV", desc: "English Standard Version - word-for-word accuracy" },
+  { value: "NIV", label: "NIV", desc: "New International Version - balanced readability" },
+  { value: "KJV", label: "KJV", desc: "King James Version - classic, poetic language" },
+  { value: "NLT", label: "NLT", desc: "New Living Translation - easy to understand" },
+  { value: "NASB", label: "NASB", desc: "New American Standard - literal precision" },
   { value: "MSG", label: "The Message", desc: "Contemporary paraphrase by Eugene Peterson" },
   { value: "Other", label: "Other", desc: "I have a different preference" },
 ];
