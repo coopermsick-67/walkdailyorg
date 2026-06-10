@@ -100,7 +100,12 @@ User profile: Faith stage: ${profile.faith_journey_stage || "growing"}. Challeng
       }),
     });
 
-    if (!res.ok) throw new Error("AI request failed");
+    if (!res.ok) {
+      let detail = "";
+      try { detail = await res.text(); } catch { /* ignore */ }
+      console.error("[Step16] /api/ai failed", res.status, detail);
+      throw new Error(`AI request failed (${res.status})`);
+    }
 
     const reader = res.body?.getReader();
     if (!reader) throw new Error("No response stream");

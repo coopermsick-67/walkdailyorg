@@ -25,10 +25,7 @@ const PUBLIC_EXACT = new Set([
 // Prefix-based public paths (startsWith)
 const PUBLIC_PREFIXES = [
   "/auth/",          // Supabase OAuth callbacks (/auth/callback etc.)
-  "/api/auth/",      // auth API routes
-  "/api/admin/",     // admin utilities (have their own secret-based auth)
-  "/api/bible",      // Bible proxy — public content, no user data
-  "/api/webhooks/",
+  "/api/",           // all API routes use their own auth; never redirect to /onboarding
   "/onboarding",     // onboarding flow is gated internally
   "/icon-",
   "/favicon",
