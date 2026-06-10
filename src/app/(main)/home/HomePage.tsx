@@ -253,7 +253,11 @@ export default function HomePage() {
         .single();
       if (data) {
         if (!data.display_name) {
-          data.display_name = user.user_metadata?.full_name || null;
+          data.display_name =
+            user.user_metadata?.full_name ||
+            user.user_metadata?.name ||
+            user.email?.split("@")[0] ||
+            null;
         }
         setProfile(data);
       }
