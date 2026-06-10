@@ -24,7 +24,6 @@ interface ProfileData {
   display_name: string;
   denomination: string;
   preferred_translation: string;
-  openrouter_api_key: string;
   streak_days: number;
 }
 
@@ -39,7 +38,6 @@ export default function ProfilePage() {
   const [displayName, setDisplayName] = useState("");
   const [denomination, setDenomination] = useState("");
   const [preferredTranslation, setPreferredTranslation] = useState("NIV");
-  const [openrouterKey, setOpenrouterKey] = useState("");
   const [streakDays, setStreakDays] = useState(0);
 
   // Stats
@@ -61,7 +59,7 @@ export default function ProfilePage() {
 
       const { data: profile } = await createClient()
         .from("profiles")
-        .select("display_name, denomination, preferred_translation, openrouter_api_key, streak_days")
+        .select("display_name, denomination, preferred_translation, streak_days")
         .eq("id", user.id)
         .single();
 
@@ -69,7 +67,6 @@ export default function ProfilePage() {
         setDisplayName(profile.display_name || "");
         setDenomination(profile.denomination || "");
         setPreferredTranslation(profile.preferred_translation || "NIV");
-        setOpenrouterKey(profile.openrouter_api_key || "");
         setStreakDays(profile.streak_days || 0);
       }
 
@@ -105,7 +102,6 @@ export default function ProfilePage() {
         display_name: displayName,
         denomination: denomination || null,
         preferred_translation: preferredTranslation,
-        openrouter_api_key: openrouterKey || null,
       })
       .eq("id", userId);
 
@@ -345,43 +341,6 @@ export default function ProfilePage() {
               </option>
             ))}
           </select>
-        </div>
-
-        <div>
-          <label
-            htmlFor="profile-openrouter"
-            className="block text-sm font-medium mb-1.5"
-            style={{ color: "var(--text-secondary)" }}
-          >
-            OpenRouter API Key
-          </label>
-          <input
-            id="profile-openrouter"
-            type="password"
-            value={openrouterKey}
-            onChange={(e) => setOpenrouterKey(e.target.value)}
-            placeholder="sk-or-..."
-            className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all duration-200"
-            style={{
-              background: "var(--input-bg)",
-              border: "1px solid var(--input-border)",
-              color: "var(--text-primary)",
-            }}
-            onFocus={(e) =>
-              (e.currentTarget.style.borderColor =
-                "var(--color-primary-500)")
-            }
-            onBlur={(e) =>
-              (e.currentTarget.style.borderColor = "var(--input-border)")
-            }
-          />
-          <p
-            className="text-xs mt-1.5"
-            style={{ color: "var(--text-muted)" }}
-          >
-            Your personal OpenRouter API key for AI chat. Stored securely in
-            your profile.
-          </p>
         </div>
 
         <button

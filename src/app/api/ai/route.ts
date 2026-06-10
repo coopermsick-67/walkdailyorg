@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAuthenticatedClient } from "@/lib/supabase/server";
 import type { AIRequest, AIStreamPayload } from "@/types/ai";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-const DAILY_LIMIT = 10;
+const DAILY_LIMIT = 50;
 const MAX_BODY_BYTES = 64_000;
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "";
 
 const SYSTEM_PROMPTS: Record<string, string> = {
   chat: `You are a faithful, warm, and knowledgeable Christian AI assistant for the Walk Daily app.
@@ -174,13 +174,8 @@ function buildMessages(
 
 async function checkRateLimit(
   userId: string,
-  hasOwnKey: boolean,
+  supabase: Awaited<ReturnType<typeof createAuthenticatedClient>>,
 ): Promise<{ allowed: boolean; remaining: number }> {
-  if (hasOwnKey) {
-    return { allowed: true, remaining: -1 }; // unlimited
-  }
-
-  const supabase = await createAuthenticatedClient(); // doesn't throw here because we try-catch usage
   const today = todayString();
 
   const { data, error } = await supabase
@@ -215,34 +210,6 @@ async function checkRateLimit(
   }
 
   return { allowed: true, remaining: remaining - 1 };
-}
-
-/* ------------------------------------------------------------------ */
-/*  API key resolution                                                 */
-/* ------------------------------------------------------------------ */
-
-async function getApiKey(supabase: SupabaseClient): Promise<{
-  key: string;
-  hasOwnKey: boolean;
-}> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("openrouter_api_key")
-    .eq("id", user!.id)
-    .maybeSingle();
-
-  return {
-    key:
-      profile?.openrouter_api_key ||
-      process.env.NEXT_PUBLIC_OPENROUTER_API_KEY ||
-      process.env.OPENROUTER_API_KEY ||
-      "",
-    hasOwnKey: !!profile?.openrouter_api_key,
-  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -378,23 +345,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Resolve API key and check rate limit (single query for both)
-    const { key: apiKey, hasOwnKey } = await getApiKey(supabase);
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: "No OpenRouter API key configured. Add one in your profile settings." },
-        { status: 402 },
-      );
-    }
-
-    const rateLimit = await checkRateLimit(user.id, hasOwnKey);
+    // Check rate limit (flat limit for all users)
+    const rateLimit = await checkRateLimit(user.id, supabase);
     if (!rateLimit.allowed) {
       return NextResponse.json(
         {
-          error: `Daily AI limit reached (${DAILY_LIMIT}/day). Add your own OpenRouter API key in Profile for unlimited access.`,
+          error: `Daily AI limit reached (${DAILY_LIMIT}/day). Please try again tomorrow.`,
           limit: DAILY_LIMIT,
         },
         { status: 429 },
+      );
+    }
+
+    // Use admin-configured API key
+    if (!OPENROUTER_API_KEY) {
+      return NextResponse.json(
+        { error: "AI service is not configured. Please contact the administrator." },
+        { status: 503 },
       );
     }
 
@@ -402,9 +369,7 @@ export async function POST(request: NextRequest) {
     const messages = buildMessages(action, body, clientMessages);
 
     // Select model
-    const model = hasOwnKey
-      ? "moonshotai/kimi-k2.6:free"
-      : process.env.AI_MODEL_PRIMARY || "nex-agi/nex-n2-pro:free";
+    const model = process.env.AI_MODEL_PRIMARY || "nex-agi/nex-n2-pro:free";
     const fallbackModel =
       process.env.AI_MODEL_FALLBACK || "moonshotai/kimi-k2.6:free";
 
@@ -431,13 +396,13 @@ export async function POST(request: NextRequest) {
         // Try primary model, fallback on failure
         (async () => {
           try {
-            for await (const chunk of streamOpenRouter(apiKey, messages, model)) {
+            for await (const chunk of streamOpenRouter(OPENROUTER_API_KEY, messages, model)) {
               push(chunk);
             }
           } catch (primaryErr) {
             try {
               for await (const chunk of streamOpenRouter(
-                apiKey,
+                OPENROUTER_API_KEY,
                 messages,
                 fallbackModel,
               )) {

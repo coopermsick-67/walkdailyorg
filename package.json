@@ -8,10 +8,14 @@
     "start": "next start"
   },
   "dependencies": {
+    "@splinetool/react-spline": "^4.1.0",
+    "@splinetool/runtime": "^1.12.97",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.1",
     "@tiptap/react": "^3.26.0",
     "@tiptap/starter-kit": "^3.26.0",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.40.0",
     "idb": "^8.0.3",
     "idb-keyval": "^6.2.5",
     "lucide-react": "^1.17.0",
@@ -19,6 +23,7 @@
     "next-pwa": "^5.6.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "tailwind-merge": "^3.6.0",
     "tiptap": "^1.32.2",
     "workbox-window": "^7.4.1",
     "zustand": "^5.0.14"

@@ -651,28 +651,28 @@ export default function LandingPage() {
               aria-label="Footer navigation"
             >
               <a
-                href="#"
+                href="/about"
                 className="transition-colors"
                 style={{ color: "var(--text-secondary)" }}
               >
                 About
               </a>
               <a
-                href="#"
+                href="/privacy"
                 className="transition-colors"
                 style={{ color: "var(--text-secondary)" }}
               >
                 Privacy Policy
               </a>
               <a
-                href="#"
+                href="/terms"
                 className="transition-colors"
                 style={{ color: "var(--text-secondary)" }}
               >
                 Terms
               </a>
               <a
-                href="#"
+                href="mailto:hello@walkdaily.app"
                 className="transition-colors"
                 style={{ color: "var(--text-secondary)" }}
               >

@@ -23,7 +23,6 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   avatar_url      TEXT,
   denomination    TEXT,                          -- e.g. "Baptist", "Catholic", "Non-denominational"
   preferred_translation TEXT DEFAULT 'NIV',      -- e.g. "NIV", "ESV", "KJV", "NLT"
-  openrouter_api_key TEXT,                       -- user's personal API key (encrypted at rest)
   streak_days     INTEGER NOT NULL DEFAULT 0,
   last_active_at  TIMESTAMPTZ,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -396,3 +395,12 @@ GRANT USAGE ON SCHEMA public TO anon, authenticated;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+
+-- ============================================================
+-- MIGRATION: Remove user-managed API key (2026-06-09)
+-- ============================================================
+-- The app now uses a single admin-managed OpenRouter API key
+-- configured via the OPENROUTER_API_KEY environment variable.
+-- Users can no longer provide their own API keys.
+
+ALTER TABLE public.profiles DROP COLUMN IF EXISTS openrouter_api_key;
