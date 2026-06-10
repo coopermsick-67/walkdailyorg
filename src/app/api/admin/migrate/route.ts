@@ -6,9 +6,9 @@ import { createClient } from "@supabase/supabase-js";
 export async function POST(request: Request) {
   const url = new URL(request.url);
   const secret = url.searchParams.get("secret");
-  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminEmail = process.env.ADMIN_EMAIL ?? "coopermsick@gmail.com";
 
-  if (!secret || !adminEmail || secret !== adminEmail) {
+  if (!secret || secret !== adminEmail) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
