@@ -183,7 +183,7 @@ export default function OnboardingPage() {
     if (update.content_depth !== undefined) supabaseUpdate.content_depth = update.content_depth;
     if (update.interests !== undefined) supabaseUpdate.interests = update.interests;
 
-    await supabase.from("profiles").update(supabaseUpdate).eq("id", userId);
+    await supabase.from("profiles").upsert({ id: userId, ...supabaseUpdate });
   }, [userId]);
 
   const goToStep = useCallback((step: number, dir: "left" | "right" = "right") => {

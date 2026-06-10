@@ -64,14 +64,16 @@ User profile: Faith stage: ${profile.faith_journey_stage || "growing"}. Challeng
         setHiddenPlan(plan);
 
         // Save to Supabase
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user;
         if (user) {
-          await supabase.from("profiles").update({
+          await supabase.from("profiles").upsert({
+            id: user.id,
             onboarding_summary: summaryText,
             onboarding_verse: verse,
             onboarding_plan: plan,
             ai_tone: tone,
-          }).eq("id", user.id);
+          });
         }
       } catch (err) {
         if (!cancelled) {

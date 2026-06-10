@@ -27,12 +27,12 @@ export default function Step19EnterApp({ name, verse }: Step19EnterAppProps) {
 
   const handleEnter = async () => {
     const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (user) {
       await supabase
         .from("profiles")
-        .update({ has_completed_onboarding: true })
-        .eq("id", user.id);
+        .upsert({ id: user.id, has_completed_onboarding: true });
     }
     router.push("/home");
   };
