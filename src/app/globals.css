@@ -101,6 +101,11 @@ html {
   -webkit-tap-highlight-color: transparent;
 }
 
+html {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
 body {
   background: var(--bg);
   color: var(--text-primary);
@@ -110,6 +115,7 @@ body {
   padding: 0;
   min-height: 100dvh;
   overflow-x: hidden;
+  max-width: 100%;
 }
 
 /* Smooth theme transitions on all themed elements */

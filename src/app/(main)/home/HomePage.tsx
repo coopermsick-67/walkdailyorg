@@ -5,8 +5,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { BookOpen, BookMarked, Sparkles, ChevronRight, Brain, PenLine, Heart } from "lucide-react";
-import { Flame } from "lucide-react";
 import LevelBadge from "@/components/home/LevelBadge";
+import StreakBadge from "@/components/home/StreakBadge";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -46,21 +46,6 @@ function getGreeting(): string {
   if (h < 12) return "morning";
   if (h < 17) return "afternoon";
   return "evening";
-}
-
-/* ------------------------------------------------------------------ */
-/*  Streak milestone badges                                            */
-/* ------------------------------------------------------------------ */
-
-function getStreakBadge(streak: number): { label: string; color: string } | null {
-  if (streak >= 365) return { label: "Year Champion", color: "#c9a227" };
-  if (streak >= 100) return { label: "Centurion", color: "#e8a317" };
-  if (streak >= 60) return { label: "Faithful", color: "#678bd6" };
-  if (streak >= 30) return { label: "Dedicated", color: "#16a34a" };
-  if (streak >= 14) return { label: "Growing", color: "#a78bfa" };
-  if (streak >= 7) return { label: "Week Warrior", color: "#f472b6" };
-  if (streak >= 3) return { label: "Starter", color: "#fb923c" };
-  return null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -387,7 +372,6 @@ export default function HomePage() {
   const greeting = getGreeting();
   const displayName = profile?.display_name || "friend";
   const streak = profile?.streak_days || 0;
-  const badge = getStreakBadge(streak);
 
   return (
     <div className="flex-1 flex flex-col max-w-3xl mx-auto px-4 pb-24">
@@ -416,37 +400,10 @@ export default function HomePage() {
           />
         </div>
         {loadingProfile ? (
-          <div className="skeleton" style={{ width: 120, height: 24, borderRadius: 8 }} />
-        ) : streak > 0 ? (
+          <div className="skeleton" style={{ width: 160, height: 36, borderRadius: 16 }} />
+        ) : (
           <div className="flex items-center gap-2 flex-wrap">
-            <div
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold"
-              style={{
-                background: streak >= 3
-                  ? "rgba(251, 146, 60, 0.15)"
-                  : "var(--surface-elevated)",
-                color: streak >= 3 ? "#ea580c" : "var(--color-accent-500)",
-                border: `1px solid ${streak >= 3 ? "rgba(251, 146, 60, 0.3)" : "rgba(201,162,39,0.25)"}`,
-              }}
-            >
-              <Flame
-                size={18}
-                style={{ color: streak >= 3 ? "#ea580c" : "#c9a227" }}
-              />
-              {streak} day{streak !== 1 ? "s" : ""}
-            </div>
-            {badge && (
-              <span
-                className="text-xs font-semibold px-2.5 py-1 rounded-full"
-                style={{
-                  background: `${badge.color}18`,
-                  color: badge.color,
-                  border: `1px solid ${badge.color}40`,
-                }}
-              >
-                {badge.label}
-              </span>
-            )}
+            <StreakBadge streak={streak} />
             <LevelBadge readingDays={streak} />
             {showOnFire && chaptersReadToday >= 5 && (
               <span
@@ -461,10 +418,6 @@ export default function HomePage() {
                 {"You're on fire! 🔥"}
               </span>
             )}
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 flex-wrap">
-            <LevelBadge readingDays={0} />
           </div>
         )}
       </section>

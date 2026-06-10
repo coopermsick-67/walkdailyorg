@@ -319,7 +319,7 @@ export default function LandingPage() {
           </div>
 
           {/* 3D Spline Scene */}
-          <div className="mt-12 h-[200px] md:h-[280px] w-full max-w-lg mx-auto">
+          <div className="mt-12 h-[200px] md:h-[280px] w-full max-w-lg mx-auto overflow-hidden">
             <SplineScene
               scene="https://prod.spline.design/6Wq1Q7YGyM-iab9i/scene.splinecode"
               className="w-full h-full"

@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { User } from "lucide-react";
 
 /**
  * Top navigation bar (desktop and tablet).
@@ -92,23 +93,22 @@ export function TopNav() {
           })}
         </nav>
 
-        {/* Auth placeholder (subagent 1 will wire this up) */}
-        <div className="flex items-center gap-3">
-          <a
-            href="/auth/login"
-            className="text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-            style={{ color: "var(--text-secondary)" }}
-          >
-            Sign in
-          </a>
-        </div>
+        <a
+          href="/profile"
+          className="flex items-center gap-2 px-3 py-2 rounded-lg transition-all hover:opacity-80"
+          aria-label="Account & settings"
+          style={{ color: "var(--text-secondary)" }}
+        >
+          <User size={18} />
+          <span className="text-sm font-medium">Account</span>
+        </a>
       </div>
     </header>
   );
 }
 
 /**
- * Mobile top bar — simpler, just the logo.
+ * Mobile top bar — logo left, profile icon right.
  */
 export function MobileTopBar() {
   return (
@@ -121,7 +121,7 @@ export function MobileTopBar() {
         borderBottom: "1px solid var(--nav-border)",
       }}
     >
-      <div className="flex items-center justify-center h-14 px-4">
+      <div className="flex items-center justify-between h-14 px-4">
         <a href="/home" className="flex items-center gap-2" aria-label="Walk Daily home">
           <div
             className="w-8 h-8 rounded-lg flex items-center justify-center"
@@ -144,6 +144,17 @@ export function MobileTopBar() {
           >
             Walk Daily
           </span>
+        </a>
+        <a
+          href="/profile"
+          className="w-9 h-9 rounded-full flex items-center justify-center transition-opacity hover:opacity-70"
+          aria-label="Account & settings"
+          style={{
+            background: "var(--surface-elevated)",
+            border: "1px solid var(--border)",
+          }}
+        >
+          <User size={18} style={{ color: "var(--text-secondary)" }} />
         </a>
       </div>
     </header>
