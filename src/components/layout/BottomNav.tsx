@@ -34,7 +34,7 @@ export function BottomNav() {
       accent: true,
     },
     {
-      href: "/prayer",
+      href: "/prayer-wall",
       label: "Prayer",
       icon: Heart,
     },

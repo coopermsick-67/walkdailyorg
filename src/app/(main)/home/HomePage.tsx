@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { BookOpen, BookMarked, Sparkles, ChevronRight, Brain, PenLine, Heart } from "lucide-react";
-import { getFallbackDailyVerse } from "@/lib/bible-api";
+import { getFallbackDailyVerse, getVerseByReference, SUPPORTED_TRANSLATIONS } from "@/lib/bible-api";
 import LevelBadge from "@/components/home/LevelBadge";
 import StreakBadge from "@/components/home/StreakBadge";
 
@@ -271,17 +271,62 @@ export default function HomePage() {
     try {
       const supabase = createClient();
       const today = new Date().toISOString().split("T")[0];
-      const { data } = await supabase
-        .from("daily_verses")
-        .select("reference, verse_text, translation")
-        .eq("date", today)
-        .single();
-      if (data) {
-        setDailyVerse({ reference: data.reference, text: data.verse_text, translation: data.translation });
-      } else {
-        const fallback = getFallbackDailyVerse();
-        setDailyVerse(fallback);
+
+      // Get the reference (from DB or fallback)
+      let reference: string;
+      let baseText: string;
+      let baseTranslation: string;
+      try {
+        const { data } = await supabase
+          .from("daily_verses")
+          .select("reference, verse_text, translation")
+          .eq("date", today)
+          .single();
+        if (data) {
+          reference = data.reference;
+          baseText = data.verse_text;
+          baseTranslation = data.translation || "KJV";
+        } else {
+          const fb = getFallbackDailyVerse();
+          reference = fb.reference;
+          baseText = fb.text;
+          baseTranslation = fb.translation;
+        }
+      } catch {
+        const fb = getFallbackDailyVerse();
+        reference = fb.reference;
+        baseText = fb.text;
+        baseTranslation = fb.translation;
       }
+
+      // Translate to the user's preferred translation
+      let text = baseText;
+      let translation = baseTranslation;
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profileData } = await supabase
+            .from("profiles")
+            .select("preferred_translation")
+            .eq("id", user.id)
+            .single();
+          const pref = profileData?.preferred_translation as string | undefined;
+          if (pref && pref !== baseTranslation) {
+            const translationObj = SUPPORTED_TRANSLATIONS.find((t) => t.abbreviation === pref);
+            if (translationObj) {
+              const fetched = await getVerseByReference(translationObj.id, reference);
+              if (fetched) {
+                text = fetched.text;
+                translation = pref;
+              }
+            }
+          }
+        }
+      } catch {
+        // Profile fetch failed — show the base translation
+      }
+
+      setDailyVerse({ reference, text, translation });
     } catch {
       const fallback = getFallbackDailyVerse();
       setDailyVerse(fallback);
@@ -399,18 +444,18 @@ export default function HomePage() {
         className="mb-4 pt-4"
         style={{ maxHeight: "35dvh" }}
       >
-        <div className="flex items-center gap-3">
+        <div className="relative">
           <h1
-            className="text-2xl md:text-3xl font-bold font-heading mb-1 flex-1"
+            className="text-2xl md:text-3xl font-bold font-heading mb-1"
             style={{ color: "var(--text-primary)" }}
           >
             Good {greeting}, {displayName}.
           </h1>
-          {/* Hidden easter egg tap target */}
+          {/* Hidden easter egg tap target — absolutely positioned so it doesn't affect layout */}
           <button
             onClick={handleLogoTap}
-            className="w-10 h-10 rounded-full opacity-0 cursor-default flex-shrink-0"
-            aria-label="App logo"
+            className="absolute top-0 right-0 w-10 h-10 rounded-full opacity-0 cursor-default"
+            aria-hidden="true"
             style={{ background: "transparent" }}
             tabIndex={-1}
           />

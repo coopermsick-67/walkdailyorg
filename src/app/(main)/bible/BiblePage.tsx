@@ -96,6 +96,7 @@ export default function BiblePage() {
   const { success } = useToast();
 
   const [view, setView] = useState<View>("books");
+  const [selectedBook, setSelectedBook] = useState<BibleBook | null>(null);
   const [selectedVerse, setSelectedVerse] = useState<BibleVerse | null>(null);
   const [showCrossRefs, setShowCrossRefs] = useState(false);
   const [crossRefTarget, setCrossRefTarget] = useState("");
@@ -164,7 +165,8 @@ export default function BiblePage() {
 
   // Navigate to a book -> show chapters
   const handleBookSelect = useCallback(
-    (_book: BibleBook) => {
+    (book: BibleBook) => {
+      setSelectedBook(book);
       setView("chapters");
     },
     [],
@@ -173,12 +175,13 @@ export default function BiblePage() {
   // Navigate to a chapter -> show reading
   const handleChapterSelect = useCallback(
     (chapter: number) => {
-      if (currentBook) {
-        navigateTo(currentBook, chapter);
+      const book = selectedBook ?? currentBook;
+      if (book) {
+        navigateTo(book, chapter);
         setView("reading");
       }
     },
-    [currentBook, navigateTo],
+    [selectedBook, currentBook, navigateTo],
   );
 
   // Go back from chapters to books
@@ -490,9 +493,9 @@ export default function BiblePage() {
           </div>
         )}
 
-        {view === "chapters" && currentBook && (
+        {view === "chapters" && (selectedBook ?? currentBook) && (
           <ChapterPicker
-            book={currentBook}
+            book={(selectedBook ?? currentBook)!}
             onSelect={handleChapterSelect}
             onBack={handleBackToBooks}
           />
