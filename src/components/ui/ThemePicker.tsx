@@ -22,7 +22,7 @@ const ACCENT_OPTIONS: AccentOption[] = [
 
 const STORAGE_KEY = "walk-daily-accent";
 
-function applyAccent(color: AccentColor) {
+export function applyAccent(color: AccentColor) {
   const option = ACCENT_OPTIONS.find((o) => o.id === color);
   if (!option || typeof document === "undefined") return;
 
