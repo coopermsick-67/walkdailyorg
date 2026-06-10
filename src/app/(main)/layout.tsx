@@ -1,8 +1,11 @@
 /**
  * Layout wrapper for the main authenticated section.
- * All tabs share the root layout's nav bars; this adds any shared
- * state or guards needed across the 5 main tabs.
+ * All tabs share the root layout's structure; this adds the nav bars
+ * and any shared state or guards needed across the 5 main tabs.
  */
+import { TopNav, MobileTopBar } from "@/components/layout/TopNav";
+import { BottomNav } from "@/components/layout/BottomNav";
+
 export default function MainLayout({
   children,
 }: {
@@ -10,15 +13,16 @@ export default function MainLayout({
 }) {
   return (
     <>
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary-500 focus:text-white focus:rounded-lg"
-      >
-        Skip to main content
-      </a>
-      <main id="main-content">
-        {children}
-      </main>
+      {/* Desktop top nav */}
+      <TopNav />
+      {/* Mobile top bar */}
+      <MobileTopBar />
+
+      {/* Page content */}
+      {children}
+
+      {/* Mobile bottom nav */}
+      <BottomNav />
     </>
   );
 }

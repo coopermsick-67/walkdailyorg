@@ -53,6 +53,22 @@ export async function GET(request: NextRequest) {
       redirectUrl.searchParams.set('error', 'Failed to sign in. Please try again.')
       return NextResponse.redirect(redirectUrl)
     }
+    // Check if user has completed onboarding
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('has_completed_onboarding')
+          .eq('id', user.id)
+          .single()
+        if (profile && !profile.has_completed_onboarding) {
+          return NextResponse.redirect(requestUrl.origin + '/onboarding')
+        }
+      } catch {
+        // Allow through
+      }
+    }
     return NextResponse.redirect(requestUrl.origin + '/home')
   }
 
@@ -76,7 +92,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(redirectUrl)
     }
 
-    // For email verification / signup confirmation, go to home
+    // For email verification / signup confirmation, check onboarding
+    if (type === 'signup' || type === 'email_change') {
+      const { data: { user: verifiedUser } } = await supabase.auth.getUser()
+      if (verifiedUser) {
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('has_completed_onboarding')
+            .eq('id', verifiedUser.id)
+            .single()
+          if (profile && !profile.has_completed_onboarding) {
+            return NextResponse.redirect(requestUrl.origin + '/onboarding')
+          }
+        } catch {
+          // Allow through
+        }
+      }
+    }
     return NextResponse.redirect(requestUrl.origin + '/home')
   }
 

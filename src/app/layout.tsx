@@ -2,8 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Lora, Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/layout/ThemeProvider";
-import { TopNav, MobileTopBar } from "@/components/layout/TopNav";
-import { BottomNav } from "@/components/layout/BottomNav";
 import { ToastProvider } from "@/components/ui/Toast";
 import { AddToHomeScreen } from "@/components/ui/AddToHomeScreen";
 
@@ -91,18 +89,10 @@ export default function RootLayout({
               Skip to main content
             </a>
 
-            {/* Desktop top nav */}
-            <TopNav />
-            {/* Mobile top bar */}
-            <MobileTopBar />
-
             {/* Main content area */}
             <main id="main-content" className="flex-1 flex flex-col pb-20 md:pb-0" tabIndex={-1}>
               {children}
             </main>
-
-            {/* Mobile bottom nav */}
-            <BottomNav />
 
             {/* PWA install prompt */}
             <AddToHomeScreen />
