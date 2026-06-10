@@ -27,7 +27,7 @@ interface PrayerRequest {
   pray_count: number;
   flag_count: number;
   created_at: string;
-  profiles?: { display_name: string | null; avatar_url: string | null } | null;
+  profiles?: { display_name: string | null; avatar_url: string | null }[] | null;
 }
 
 interface PrayerComment {
@@ -36,7 +36,7 @@ interface PrayerComment {
   user_id: string;
   body: string;
   created_at: string;
-  profiles?: { display_name: string | null; avatar_url: string | null } | null;
+  profiles?: { display_name: string | null; avatar_url: string | null }[] | null;
 }
 
 type PrayerCommentRow = {
@@ -45,7 +45,7 @@ type PrayerCommentRow = {
   user_id: string;
   body: string;
   created_at: string;
-  profiles: { display_name: string | null; avatar_url: string | null } | null;
+  profiles: { display_name: string | null; avatar_url: string | null }[] | null;
 };
 
 /* ------------------------------------------------------------------ */
@@ -125,7 +125,7 @@ export default function PrayerDetailPage() {
       return;
     }
 
-    setPrayer(data as PrayerRequest);
+    setPrayer(data as unknown as unknown as PrayerRequest);
 
     // Check if already prayed
     try {
@@ -157,7 +157,7 @@ export default function PrayerDetailPage() {
 
     if (error) return;
 
-    const mapped = (data as PrayerCommentRow[] | null) || [];
+    const mapped = (data as unknown as PrayerCommentRow[] | null) || [];
     setComments((prev) => (append ? [...prev, ...mapped] : mapped));
     setHasOlderComments(mapped.length >= COMMENTS_PAGE_SIZE);
     setCommentsOffset(offset + mapped.length);
@@ -206,7 +206,7 @@ export default function PrayerDetailPage() {
             .eq("id", event.record.id)
             .single();
           if (data) {
-            setComments((prev) => [...prev, data as PrayerComment]);
+            setComments((prev) => [...prev, data as unknown as PrayerComment]);
           }
         })();
       } else if (event.type === "DELETE") {
@@ -417,7 +417,7 @@ export default function PrayerDetailPage() {
 
   const authorName = prayer.is_anonymous
     ? "Anonymous"
-    : prayer.profiles?.display_name || "ABrother";
+    : prayer.profiles?.[0]?.display_name || "ABrother";
   const isAuthor = currentUserId === prayer.user_id;
 
   return (
@@ -679,7 +679,7 @@ export default function PrayerDetailPage() {
             <div className="space-y-2">
               {comments.map((comment) => {
                 const commentAuthor =
-                  comment.profiles?.display_name || "ABrother";
+                  comment.profiles?.[0]?.display_name || "ABrother";
                 const canDelete =
                   currentUserId === comment.user_id ||
                   currentUserId === prayer.user_id;

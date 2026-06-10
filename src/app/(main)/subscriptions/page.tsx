@@ -100,7 +100,7 @@ export default function SubscriptionsPage() {
     // Filter out any where prayer request was deleted
     const valid = (data || []).filter(
       (s: { prayer_requests: unknown }) => s.prayer_requests !== null,
-    ) as Subscription[];
+    ) as unknown as Subscription[];
 
     setSubscriptions(valid);
     setLoading(false);

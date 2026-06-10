@@ -41,13 +41,6 @@ export function usePrayerRealtime(onEvent: (event: PrayerRealtimeEvent) => void)
     let cancelled = false;
     const supabase = createClient();
 
-    // Remove any pre-existing channel with the same name to prevent
-    // duplicates when the effect re-fires (StrictMode / rapid navigation).
-    const existing = supabase.getChannels().find((c) => c.name === "prayer-requests-realtime");
-    if (existing) {
-      supabase.removeChannel(existing);
-    }
-
     const channel = supabase
       .channel("prayer-requests-realtime")
       .on(
@@ -92,13 +85,7 @@ export function usePrayerCommentsRealtime(
     let cancelled = false;
     const supabase = createClient();
 
-    // Remove any pre-existing channel with the same name
     const channelName = `prayer-comments-${prayerId}`;
-    const existing = supabase.getChannels().find((c) => c.name === channelName);
-    if (existing) {
-      supabase.removeChannel(existing);
-    }
-
     const channel = supabase
       .channel(channelName)
       .on(
@@ -143,13 +130,7 @@ export function usePrayerWallRealtime(
     let cancelled = false;
     const supabase = createClient();
 
-    // Remove any pre-existing channel with the same name
     const channelName = "prayer-wall-comments";
-    const existing = supabase.getChannels().find((c) => c.name === channelName);
-    if (existing) {
-      supabase.removeChannel(existing);
-    }
-
     const channel = supabase
       .channel(channelName)
       .on(

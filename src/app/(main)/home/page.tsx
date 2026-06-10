@@ -129,7 +129,7 @@ export default function HomePage() {
         .select("reference, verse_text, translation")
         .eq("date", today)
         .single();
-      if (data) setDailyVerse(data);
+      if (data) setDailyVerse({ reference: data.reference, text: data.verse_text, translation: data.translation });
     } catch {
       /* silent */
     }
@@ -152,10 +152,10 @@ export default function HomePage() {
         .limit(3);
       if (data) {
         setPrayers(
-          data.map((row: { id: string; title: string; profiles: { display_name: string | null } | null }) => ({
+          data.map((row: { id: string; title: string; profiles: { display_name: string | null }[] }) => ({
             id: row.id,
             title: row.title,
-            author_name: row.profiles?.display_name || "Anonymous",
+            author_name: row.profiles?.[0]?.display_name || "Anonymous",
           })),
         );
       }

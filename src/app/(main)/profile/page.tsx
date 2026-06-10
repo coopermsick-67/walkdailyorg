@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient, supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 
 const DENOMINATIONS = [
@@ -50,7 +50,7 @@ export default function ProfilePage() {
     async function loadProfile() {
       const {
         data: { user },
-      } = await supabase.auth.getUser();
+      } = await createClient().auth.getUser();
 
       if (!user) {
         router.push("/login");
@@ -59,7 +59,7 @@ export default function ProfilePage() {
 
       setUserId(user.id);
 
-      const { data: profile } = await supabase
+      const { data: profile } = await createClient()
         .from("profiles")
         .select("display_name, denomination, preferred_translation, openrouter_api_key, streak_days")
         .eq("id", user.id)
@@ -74,14 +74,14 @@ export default function ProfilePage() {
       }
 
       // Count verses read (distinct chapters from reading_progress)
-      const { count: readCount } = await supabase
+      const { count: readCount } = await createClient()
         .from("reading_progress")
         .select("*", { count: "exact", head: true })
         .eq("user_id", user.id);
       setVersesRead(readCount || 0);
 
       // Count prayers posted
-      const { count: prayerCount } = await supabase
+      const { count: prayerCount } = await createClient()
         .from("prayer_requests")
         .select("*", { count: "exact", head: true })
         .eq("user_id", user.id);
@@ -99,7 +99,7 @@ export default function ProfilePage() {
 
     setSaving(true);
 
-    const { error } = await supabase
+    const { error } = await createClient()
       .from("profiles")
       .update({
         display_name: displayName,
@@ -119,7 +119,7 @@ export default function ProfilePage() {
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await createClient().auth.signOut();
     router.push("/login");
     router.refresh();
   };

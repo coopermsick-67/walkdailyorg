@@ -512,7 +512,6 @@ export function JournalEditor({ entry, onSave, onCancel }: JournalEditorProps) {
           color: "var(--text-primary)",
           lineHeight: 1.7,
         }}
-        placeholder="Write your thoughts, reflections, and prayers..."
         suppressContentEditableWarning
         data-placeholder="Write your thoughts, reflecting on what God is teaching you..."
       />

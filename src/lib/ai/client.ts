@@ -100,8 +100,8 @@ export function streamAI(
     } catch (err: unknown) {
       if (cancelled) return;
       clearTimeout(timeoutId);
-      if (err.name === "AbortError") return;
-      callbacks.onError(err);
+      if (err instanceof Error && err.name === "AbortError") return;
+      callbacks.onError(err instanceof Error ? err : new Error(String(err)));
     }
   })();
 

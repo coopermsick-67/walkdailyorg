@@ -26,7 +26,7 @@ interface PrayerRequest {
   pray_count: number;
   flag_count: number;
   created_at: string;
-  profiles?: { display_name: string | null; avatar_url: string | null } | null;
+  profiles?: { display_name: string | null; avatar_url: string | null }[] | null;
   comment_count?: number;
 }
 
@@ -40,7 +40,7 @@ type PrayerRow = {
   pray_count: number;
   flag_count: number;
   created_at: string;
-  profiles: { display_name: string | null; avatar_url: string | null } | null;
+  profiles: { display_name: string | null; avatar_url: string | null }[] | null;
 };
 
 type CommentCountRow = {
@@ -162,7 +162,7 @@ export default function PrayerWallPage() {
         return;
       }
 
-      const mapped: PrayerRequest[] = ((data || []) as PrayerRow[]).map((row) => ({
+      const mapped: PrayerRequest[] = ((data || []) as unknown as PrayerRow[]).map((row) => ({
         ...row,
         profiles: row.profiles ?? null,
         comment_count: 0,
@@ -204,18 +204,19 @@ export default function PrayerWallPage() {
     useCallback((event: PrayerRealtimeEvent) => {
       setPrayers((prev) => {
         if (event.type === "INSERT") {
-          const rec = event.record as PrayerRequest;
+          const rec = event.record as unknown as PrayerRequest;
           if (rec.flag_count >= 5) return prev;
           return [{ ...rec, profiles: null, comment_count: 0 }, ...prev];
         }
         if (event.type === "UPDATE") {
+          const rec = event.record as unknown as Record<string, unknown>;
           return prev.map((p) =>
-            p.id === event.record.id
+            p.id === rec.id
               ? {
                   ...p,
-                  pray_count: event.record.pray_count ?? p.pray_count,
-                  flag_count: event.record.flag_count ?? p.flag_count,
-                  is_answered: event.record.is_answered ?? p.is_answered,
+                  pray_count: (rec.pray_count as number) ?? p.pray_count,
+                  flag_count: (rec.flag_count as number) ?? p.flag_count,
+                  is_answered: (rec.is_answered as boolean) ?? p.is_answered,
                 }
               : p,
           );
@@ -348,7 +349,7 @@ export default function PrayerWallPage() {
       const authorName = prayer
         ? prayer.is_anonymous
           ? "Anonymous"
-          : prayer.profiles?.display_name || "ABrother"
+          : prayer.profiles?.[0]?.display_name || "ABrother"
         : "them";
 
       // Increment count
@@ -860,7 +861,7 @@ function PrayerCard({
   const [showMenu, setShowMenu] = useState(false);
   const authorName = prayer.is_anonymous
     ? "Anonymous"
-    : prayer.profiles?.display_name || "ABrother";
+    : prayer.profiles?.[0]?.display_name || "ABrother";
   const preview =
     prayer.body.length > 120
       ? prayer.body.slice(0, 120) + "..."

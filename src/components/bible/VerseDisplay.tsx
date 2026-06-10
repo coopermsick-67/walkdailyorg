@@ -16,7 +16,7 @@ export default function VerseDisplay({
   onTap,
 }: {
   verse: BibleVerse;
-  onTap: (verse: BibleVerse) => void;
+  onTap?: (verse: BibleVerse) => void;
 }) {
   const highlights = useBibleStore((s) => s.highlights);
   const bookmarks = useBibleStore((s) => s.bookmarks);
@@ -29,7 +29,7 @@ export default function VerseDisplay({
     : "transparent";
 
   const handleClick = useCallback(() => {
-    onTap(verse);
+    onTap?.(verse);
   }, [verse, onTap]);
 
   return (
@@ -43,7 +43,7 @@ export default function VerseDisplay({
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          onTap(verse);
+          onTap?.(verse);
         }
       }}
     >

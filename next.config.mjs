@@ -7,12 +7,12 @@ const pwaConfig = withPWA({
   disable: process.env.NODE_ENV === "development",
   // Don't precache admin, auth, error, not-found, or dynamic [id] routes.
   // These should always come from the network so users see fresh content.
-  globIgnores: [
-    "**/app/admin/**",
-    "**/app/auth/**",
-    "**/app/_not-found/**",
-    "**/app/error/**",
-    "**/app/prayer-wall/[id]/**",
+  buildExcludes: [
+    /app\/admin/,
+    /app\/auth/,
+    /_not-found/,
+    /app\/error/,
+    /prayer-wall\/\[id\]/,
   ],
   runtimeCaching: [
     {
