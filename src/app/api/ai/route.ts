@@ -394,10 +394,12 @@ export async function POST(request: NextRequest) {
     const messages = buildMessages(action, body, clientMessages, dynamicPrompt);
 
     // Select model chain: primary → fallback1 → fallback2
-    const model = process.env.AI_MODEL_PRIMARY || "tencent/hy3-preview";
+    // Swapped from tencent/hy3-preview, nex-agi/nex-n2-pro:free, openrouter/owl-alpha
+    // which do not exist on OpenRouter — using verified working models instead.
+    const model = process.env.AI_MODEL_PRIMARY || "anthropic/claude-3.5-haiku";
     const fallbackModels: string[] = [
-      process.env.AI_MODEL_FALLBACK || "nex-agi/nex-n2-pro:free",
-      process.env.AI_MODEL_FALLBACK2 || "openrouter/owl-alpha",
+      process.env.AI_MODEL_FALLBACK || "meta-llama/llama-3.1-8b-instruct:free",
+      process.env.AI_MODEL_FALLBACK2 || "mistralai/mistral-7b-instruct:free",
     ];
 
     // Stream response
