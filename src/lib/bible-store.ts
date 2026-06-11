@@ -375,10 +375,13 @@ export const useBibleStore = create<BibleState>((set, get) => ({
     try {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
+      // Use a canonical year-2000 date so DB entries repeat annually
+      const now = new Date();
+      const canonicalDate = new Date(2000, now.getMonth(), now.getDate()).toISOString().split("T")[0];
       const { data } = await supabase
         .from("daily_verses")
         .select("date, reference, verse_text, translation")
-        .eq("date", today)
+        .eq("date", canonicalDate)
         .single();
 
       if (data) {
