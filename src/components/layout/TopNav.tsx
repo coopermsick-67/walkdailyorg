@@ -119,6 +119,7 @@ export function MobileTopBar() {
         backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)",
         borderBottom: "1px solid var(--nav-border)",
+        paddingTop: "env(safe-area-inset-top)",
       }}
     >
       <div className="flex items-center justify-between h-14 px-4">
