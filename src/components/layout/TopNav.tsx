@@ -13,6 +13,7 @@ export function TopNav() {
   const links = [
     { href: "/home", label: "Home" },
     { href: "/bible", label: "Bible" },
+    { href: "/bible/plans", label: "Plans" },
     { href: "/chat", label: "Chat" },
     { href: "/prayer-wall", label: "Prayer" },
     { href: "/journal", label: "Journal" },

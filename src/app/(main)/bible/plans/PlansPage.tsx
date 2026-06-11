@@ -95,21 +95,27 @@ function GenerateModal({ onGenerate, onClose, generating }: GenerateModalProps) 
         <p className="text-xs font-semibold mb-2 uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
           Duration
         </p>
-        <div className="flex gap-2 mb-5">
-          {[7, 30, 90].map((d) => (
-            <button
-              key={d}
-              onClick={() => setDuration(d)}
-              className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all"
-              style={{
-                background: duration === d ? "var(--color-accent-500)" : "var(--surface-elevated)",
-                color: duration === d ? "#fff" : "var(--text-secondary)",
-                border: "1px solid var(--border)",
-              }}
-            >
-              {d} days
-            </button>
-          ))}
+        <div className="flex items-center gap-3 mb-5">
+          <input
+            type="number"
+            min={1}
+            max={365}
+            value={duration}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              if (!isNaN(v)) setDuration(Math.min(365, Math.max(1, v)));
+            }}
+            className="w-24 px-3 py-2.5 rounded-xl text-sm font-semibold text-center"
+            style={{
+              background: "var(--surface-elevated)",
+              border: "1px solid var(--color-accent-500)",
+              color: "var(--text-primary)",
+              outline: "none",
+            }}
+          />
+          <span className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+            days <span style={{ color: "var(--text-muted)" }}>(1–365)</span>
+          </span>
         </div>
 
         {/* Theme picker */}

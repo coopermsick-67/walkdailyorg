@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? "";
+const OPENROUTER_API_KEY =
+  process.env.OPENROUTER_API_KEY ??
+  process.env.NEXT_PUBLIC_OPENROUTER_API_KEY ??
+  "";
 
 interface PlanDay {
   day_number: number;
@@ -25,7 +28,10 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();
-  const duration: 7 | 30 | 90 = [7, 30, 90].includes(body.duration) ? body.duration : 30;
+  const rawDuration = parseInt(body.duration, 10);
+  const duration: number = Number.isFinite(rawDuration)
+    ? Math.min(365, Math.max(1, rawDuration))
+    : 30;
   const theme: string = (body.theme as string) || "Surprise me";
 
   // Fetch profile for personalization
@@ -51,6 +57,17 @@ export async function POST(request: Request) {
 Your plans reference real Bible passages with accurate chapter numbers.
 Always respond with valid JSON only — no markdown, no explanation outside the JSON.`;
 
+  const paceNote =
+    duration <= 7
+      ? "This is a short, focused plan — go deep on a tight theme, keep passages short and punchy."
+      : duration <= 14
+        ? "Medium-short plan — build a single arc over two weeks."
+        : duration <= 30
+          ? "Month-long plan — cover a full book or theme arc with steady daily momentum."
+          : duration <= 90
+            ? "Quarter plan — span multiple books, mix Old and New Testament chapters, build progressively."
+            : `Long-haul ${duration}-day plan — pace gradually, revisit themes cyclically, mix deep dives with lighter passages to sustain engagement.`;
+
   const userPrompt = `Create a ${duration}-day personalized Bible reading plan for ${firstName}.
 
 Profile:
@@ -60,6 +77,7 @@ Profile:
 - Translation preference: ${translation}
 
 ${themePrompt}
+Pacing guidance: ${paceNote}
 
 Return ONLY valid JSON in this exact format (no markdown, no backticks):
 {
@@ -72,6 +90,7 @@ Return ONLY valid JSON in this exact format (no markdown, no backticks):
 }
 
 Rules:
+- Include ALL ${duration} days in the days array
 - Use real Bible passages with accurate chapter/verse ranges for ${translation}
 - Day references should be specific (e.g. "Romans 8:1-17", not "Romans 8")
 - content_snippet: max 80 characters, practical and encouraging
@@ -95,7 +114,7 @@ Rules:
           { role: "user", content: userPrompt },
         ],
         temperature: 0.7,
-        max_tokens: duration === 7 ? 1200 : duration === 30 ? 4000 : 10000,
+        max_tokens: Math.min(16000, Math.max(1200, duration * 120)),
       }),
     });
 
