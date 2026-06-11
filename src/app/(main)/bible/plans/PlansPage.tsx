@@ -46,7 +46,7 @@ interface DBDay {
 /* ------------------------------------------------------------------ */
 
 interface GenerateModalProps {
-  onGenerate: (duration: number, theme: string) => void;
+  onGenerate: (duration: number, theme: string, customTopic: string) => void;
   onClose: () => void;
   generating: boolean;
 }
@@ -69,6 +69,7 @@ const THEMES = [
 function GenerateModal({ onGenerate, onClose, generating }: GenerateModalProps) {
   const [duration, setDuration] = useState(30);
   const [theme, setTheme] = useState("Surprise me");
+  const [customTopic, setCustomTopic] = useState("");
 
   return (
     <div
@@ -122,15 +123,15 @@ function GenerateModal({ onGenerate, onClose, generating }: GenerateModalProps) 
         <p className="text-xs font-semibold mb-2 uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
           Theme
         </p>
-        <div className="flex flex-wrap gap-2 mb-6">
+        <div className="flex flex-wrap gap-2 mb-4">
           {THEMES.map((t) => (
             <button
               key={t}
-              onClick={() => setTheme(t)}
+              onClick={() => { setTheme(t); setCustomTopic(""); }}
               className="px-3 py-1.5 rounded-full text-xs font-medium transition-all"
               style={{
-                background: theme === t ? "var(--color-accent-500)" : "var(--surface-elevated)",
-                color: theme === t ? "#fff" : "var(--text-secondary)",
+                background: theme === t && !customTopic ? "var(--color-accent-500)" : "var(--surface-elevated)",
+                color: theme === t && !customTopic ? "#fff" : "var(--text-secondary)",
                 border: "1px solid var(--border)",
               }}
             >
@@ -139,8 +140,28 @@ function GenerateModal({ onGenerate, onClose, generating }: GenerateModalProps) 
           ))}
         </div>
 
+        {/* Custom topic input */}
+        <div className="mb-6">
+          <p className="text-xs font-semibold mb-2 uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+            Or type your own topic
+          </p>
+          <input
+            type="text"
+            value={customTopic}
+            maxLength={80}
+            placeholder="e.g. anxiety, marriage, leadership..."
+            onChange={(e) => setCustomTopic(e.target.value)}
+            className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+            style={{
+              background: "var(--surface-elevated)",
+              border: `1px solid ${customTopic ? "var(--color-accent-500)" : "var(--border)"}`,
+              color: "var(--text-primary)",
+            }}
+          />
+        </div>
+
         <button
-          onClick={() => onGenerate(duration, theme)}
+          onClick={() => onGenerate(duration, theme, customTopic)}
           disabled={generating}
           className="w-full py-3.5 rounded-xl font-semibold flex items-center justify-center gap-2 disabled:opacity-60 transition-all hover:opacity-90"
           style={{
@@ -490,14 +511,14 @@ export default function ReadingPlansPage() {
 
   useEffect(() => { loadPlans(); }, [loadPlans]);
 
-  const handleGenerate = async (duration: number, theme: string) => {
+  const handleGenerate = async (duration: number, theme: string, customTopic: string) => {
     setGenerating(true);
     setGenerateError("");
     try {
       const res = await fetch("/api/plans/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ duration, theme }),
+        body: JSON.stringify({ duration, theme, customTopic: customTopic.trim() }),
       });
       if (!res.ok) {
         const err = await res.json();

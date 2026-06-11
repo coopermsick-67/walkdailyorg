@@ -37,6 +37,14 @@ export async function POST(request: Request) {
     ? Math.min(365, Math.max(1, rawDuration))
     : 30;
   const theme: string = (body.theme as string) || "Surprise me";
+  // sanitize custom topic: max 80 chars, strip backticks and code fences
+  const rawCustomTopic = (body.customTopic as string | undefined) ?? "";
+  const customTopic = rawCustomTopic
+    .replace(/`/g, "")
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/[<>]/g, "")
+    .trim()
+    .slice(0, 80);
 
   // Fetch profile for personalization
   const { data: profile } = await supabase
@@ -53,9 +61,11 @@ export async function POST(request: Request) {
   const readingHistory = (profile?.bible_reading_history as string | null) || "some familiarity";
   const translation = (profile?.preferred_translation as string | null) || "NIV";
 
-  const themePrompt = theme === "Surprise me"
-    ? `Choose the theme that best fits their profile.`
-    : `Theme: "${theme}".`;
+  const themePrompt = customTopic
+    ? `Build this ${duration}-day plan focused on the theme: "${customTopic}". Tie it back to ${firstName}'s spiritual challenges (${challenges}) wherever natural.`
+    : theme === "Surprise me"
+      ? `Choose the theme that best fits their profile.`
+      : `Theme: "${theme}".`;
 
   const systemPrompt = `You are a Bible scholar and spiritual director creating personalized reading plans.
 Your plans reference real Bible passages with accurate chapter numbers.
