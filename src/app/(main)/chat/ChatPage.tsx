@@ -30,7 +30,7 @@ function formatHistoryDate(dateStr: string): string {
 
 interface UserProfile {
   faith_journey: string | null;
-  spiritual_challenge: string | null;
+  spiritual_challenges: string[] | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -44,7 +44,7 @@ interface PersonalizedPrompt {
 }
 
 function getPersonalizedPrompts(profile: UserProfile): PersonalizedPrompt[] {
-  const challenge = profile.spiritual_challenge;
+  const challenge = profile.spiritual_challenges?.[0] ?? null;
 
   const byChallenge: Record<string, PersonalizedPrompt> = {
     time: {
@@ -121,8 +121,9 @@ function PersonalizedGreeting({ profile }: { profile: UserProfile | null }) {
     sharing: "stepping out in boldness to share the Gospel",
   };
 
-  const subtitle = profile?.spiritual_challenge && challengeLabels[profile.spiritual_challenge]
-    ? `I'm here to help you with ${challengeLabels[profile.spiritual_challenge]}.`
+  const firstChallenge = profile?.spiritual_challenges?.[0];
+  const subtitle = firstChallenge && challengeLabels[firstChallenge]
+    ? `I'm here to help you with ${challengeLabels[firstChallenge]}.`
     : "How can I help you grow in your faith today?";
 
   return (
@@ -193,6 +194,8 @@ export default function ChatPage() {
   const cancelRef = useRef<(() => void) | null>(null);
   const scrollPositionRef = useRef<{ top: number; height: number } | null>(null);
 
+  const DAILY_AI_LIMIT = 100;
+
   /** Fetch AI quota remaining */
   const loadAIQuota = useCallback(async () => {
     try {
@@ -200,12 +203,13 @@ export default function ChatPage() {
       const { data: { user } } = await client.auth.getUser();
       if (!user) return;
       const today = new Date().toISOString().split("T")[0];
-      const { count } = await client
+      const { data } = await client
         .from("ai_usage")
-        .select("*", { count: "exact", head: true })
+        .select("count")
         .eq("user_id", user.id)
-        .gte("created_at", `${today}T00:00:00`);
-      setAiQuotaRemaining(50 - (count || 0));
+        .eq("date", today)
+        .maybeSingle();
+      setAiQuotaRemaining(DAILY_AI_LIMIT - (data?.count || 0));
     } catch {
       /* silent */
     }
@@ -222,7 +226,7 @@ export default function ChatPage() {
       }
       const { data } = await client
         .from("profiles")
-        .select("faith_journey, spiritual_challenge")
+        .select("faith_journey, spiritual_challenges")
         .eq("id", user.id)
         .single();
       if (data) setProfile(data);
@@ -321,20 +325,9 @@ export default function ChatPage() {
       const client = createClient();
       const { data: { user } } = await client.auth.getUser();
       if (!user) return;
-      const { data } = await client
-        .from("chat_messages")
-        .select("created_at")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(500);
+      const { data } = await client.rpc("get_chat_dates", { p_user_id: user.id });
       if (data) {
-        const seen = new Set<string>();
-        const dates: string[] = [];
-        for (const row of data) {
-          const d = new Date(row.created_at).toLocaleDateString("en-CA");
-          if (!seen.has(d)) { seen.add(d); dates.push(d); }
-        }
-        setHistoryDates(dates);
+        setHistoryDates((data as { date: string }[]).map((r) => r.date));
       }
     } catch { /* silent */ }
     setLoadingHistoryDates(false);
@@ -463,6 +456,7 @@ export default function ChatPage() {
             toastError(error.message || "Something went wrong. Please try again.");
             setMessages((prev) => prev.filter((m) => m.id !== assistantMsg.id));
           },
+          onRateLimitRemaining: (remaining) => setAiQuotaRemaining(remaining),
         },
       );
 
@@ -514,8 +508,7 @@ export default function ChatPage() {
         const { error } = await client.from("journal_entries").insert({
           user_id: user.id,
           title,
-          content: entryContent,
-          ai_generated: true,
+          body: entryContent,
         });
 
         if (error) throw error;
@@ -555,7 +548,7 @@ export default function ChatPage() {
   }, []);
 
   // Determine if we have onboarding data
-  const hasOnboardingData = profile?.faith_journey || profile?.spiritual_challenge;
+  const hasOnboardingData = profile?.faith_journey || profile?.spiritual_challenges?.length;
   const personalizedPrompts = hasOnboardingData && profile ? getPersonalizedPrompts(profile) : null;
 
   // Chat streak celebration messages
@@ -732,7 +725,7 @@ export default function ChatPage() {
                     color: aiQuotaRemaining <= 5 ? "#ef4444" : "var(--text-muted)",
                   }}
                 >
-                  {aiQuotaRemaining}/50 left
+                  {aiQuotaRemaining}/{DAILY_AI_LIMIT} left
                 </span>
               )}
             </div>

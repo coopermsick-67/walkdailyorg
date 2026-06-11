@@ -1,14 +1,17 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-// One-time migration endpoint. Protected by ADMIN_EMAIL env var.
-// POST /api/admin/migrate?secret=<ADMIN_EMAIL>
+// One-time migration endpoint.
+// Requires: Authorization: Bearer <ADMIN_SECRET_KEY>
+// Feature flag: ADMIN_MIGRATE_ENABLED=true (default false — disable after successful run)
 export async function POST(request: Request) {
-  const url = new URL(request.url);
-  const secret = url.searchParams.get("secret");
-  const adminEmail = process.env.ADMIN_EMAIL ?? "coopermsick@gmail.com";
+  if (process.env.ADMIN_MIGRATE_ENABLED !== "true") {
+    return NextResponse.json({ error: "Not Found" }, { status: 404 });
+  }
 
-  if (!secret || secret !== adminEmail) {
+  const adminSecret = process.env.ADMIN_SECRET_KEY;
+  const authHeader = request.headers.get("Authorization");
+  if (!adminSecret || authHeader !== `Bearer ${adminSecret}`) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -32,12 +35,19 @@ export async function POST(request: Request) {
     "journal_entries",
     "prayer_requests",
     "prayer_comments",
+    "prayer_flags",
     "verse_marks",
     "reading_progress",
     "verse_memory",
     "daily_verses",
+    "daily_devotionals",
     "ai_usage",
     "chat_messages",
+    "push_subscriptions",
+    "reading_plans",
+    "reading_plan_days",
+    "groups",
+    "group_members",
   ];
 
   const tableStatus: Record<string, string> = {};
@@ -172,6 +182,9 @@ BEGIN
   BEGIN ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS onboarding_plan TEXT; EXCEPTION WHEN OTHERS THEN NULL; END;
   BEGIN ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS onboarding_summary TEXT; EXCEPTION WHEN OTHERS THEN NULL; END;
   BEGIN ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMPTZ; EXCEPTION WHEN OTHERS THEN NULL; END;
+  BEGIN ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS timezone TEXT; EXCEPTION WHEN OTHERS THEN NULL; END;
+  BEGIN ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS push_notifications_enabled BOOLEAN DEFAULT FALSE; EXCEPTION WHEN OTHERS THEN NULL; END;
+  BEGIN ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS daily_reminder_hour INTEGER; EXCEPTION WHEN OTHERS THEN NULL; END;
 
   -- RLS insert policy for profiles
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='profiles' AND policyname='Users can insert their own profile') THEN
@@ -350,14 +363,166 @@ BEGIN
     CREATE POLICY "Users can manage their own chat messages" ON public.chat_messages FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
   END IF;
 
-  -- RPC functions
-  -- increment_prayer_count handled outside via CREATE OR REPLACE
+  -- prayer_flags (replaces direct flag_count mutation)
+  CREATE TABLE IF NOT EXISTS public.prayer_flags (
+    prayer_id UUID NOT NULL REFERENCES public.prayer_requests(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(prayer_id, user_id)
+  );
+  ALTER TABLE public.prayer_flags ENABLE ROW LEVEL SECURITY;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='prayer_flags' AND policyname='Authenticated users can flag prayers') THEN
+    CREATE POLICY "Authenticated users can flag prayers" ON public.prayer_flags FOR INSERT WITH CHECK (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='prayer_flags' AND policyname='Users can view own flags') THEN
+    CREATE POLICY "Users can view own flags" ON public.prayer_flags FOR SELECT USING (auth.uid() = user_id);
+  END IF;
+
+  -- Lock flag_count to service_role only (authenticated users use flag_prayer RPC instead)
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='prayer_requests' AND policyname='Service role can update flag_count') THEN
+    CREATE POLICY "Service role can update flag_count" ON public.prayer_requests FOR UPDATE USING (auth.role() = 'service_role');
+  END IF;
+
+  -- daily_devotionals (Batch B: cache devotionals per day)
+  CREATE TABLE IF NOT EXISTS public.daily_devotionals (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    date DATE NOT NULL UNIQUE,
+    content TEXT NOT NULL,
+    verse_reference TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  ALTER TABLE public.daily_devotionals ENABLE ROW LEVEL SECURITY;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='daily_devotionals' AND policyname='Anyone can read daily devotionals') THEN
+    CREATE POLICY "Anyone can read daily devotionals" ON public.daily_devotionals FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='daily_devotionals' AND policyname='Authenticated users can insert devotionals') THEN
+    CREATE POLICY "Authenticated users can insert devotionals" ON public.daily_devotionals FOR INSERT WITH CHECK (true);
+  END IF;
+
+  -- push_subscriptions (Feature 1: Web Push)
+  CREATE TABLE IF NOT EXISTS public.push_subscriptions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    endpoint TEXT NOT NULL,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, endpoint)
+  );
+  ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='push_subscriptions' AND policyname='Users can manage their own push subscriptions') THEN
+    CREATE POLICY "Users can manage their own push subscriptions" ON public.push_subscriptions FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+  END IF;
+
+  -- reading_plans (Feature 2: AI Bible reading plans)
+  CREATE TABLE IF NOT EXISTS public.reading_plans (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    description TEXT,
+    total_days INTEGER NOT NULL DEFAULT 7,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  ALTER TABLE public.reading_plans ENABLE ROW LEVEL SECURITY;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='reading_plans' AND policyname='Users can manage their own reading plans') THEN
+    CREATE POLICY "Users can manage their own reading plans" ON public.reading_plans FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+  END IF;
+
+  -- reading_plan_days
+  CREATE TABLE IF NOT EXISTS public.reading_plan_days (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    plan_id UUID NOT NULL REFERENCES public.reading_plans(id) ON DELETE CASCADE,
+    day_number INTEGER NOT NULL,
+    reference TEXT NOT NULL,
+    content_snippet TEXT,
+    completed_at TIMESTAMPTZ,
+    UNIQUE(plan_id, day_number)
+  );
+  ALTER TABLE public.reading_plan_days ENABLE ROW LEVEL SECURITY;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='reading_plan_days' AND policyname='Users can manage plan days through plan ownership') THEN
+    CREATE POLICY "Users can manage plan days through plan ownership" ON public.reading_plan_days FOR ALL
+      USING (EXISTS (SELECT 1 FROM public.reading_plans rp WHERE rp.id = plan_id AND rp.user_id = auth.uid()))
+      WITH CHECK (EXISTS (SELECT 1 FROM public.reading_plans rp WHERE rp.id = plan_id AND rp.user_id = auth.uid()));
+  END IF;
+
+  -- groups (Feature 5: Accountability groups)
+  CREATE TABLE IF NOT EXISTS public.groups (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    invite_code TEXT NOT NULL UNIQUE DEFAULT UPPER(SUBSTRING(gen_random_uuid()::TEXT FROM 1 FOR 6)),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  ALTER TABLE public.groups ENABLE ROW LEVEL SECURITY;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='groups' AND policyname='Members can view their groups') THEN
+    CREATE POLICY "Members can view their groups" ON public.groups FOR SELECT
+      USING (EXISTS (SELECT 1 FROM public.group_members gm WHERE gm.group_id = id AND gm.user_id = auth.uid()));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='groups' AND policyname='Authenticated users can create groups') THEN
+    CREATE POLICY "Authenticated users can create groups" ON public.groups FOR INSERT WITH CHECK (auth.uid() = owner_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='groups' AND policyname='Owners can update groups') THEN
+    CREATE POLICY "Owners can update groups" ON public.groups FOR UPDATE USING (auth.uid() = owner_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='groups' AND policyname='Owners can delete groups') THEN
+    CREATE POLICY "Owners can delete groups" ON public.groups FOR DELETE USING (auth.uid() = owner_id);
+  END IF;
+
+  -- group_members
+  CREATE TABLE IF NOT EXISTS public.group_members (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    group_id UUID NOT NULL REFERENCES public.groups(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('owner','member')),
+    joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(group_id, user_id)
+  );
+  ALTER TABLE public.group_members ENABLE ROW LEVEL SECURITY;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='group_members' AND policyname='Group members can view each other') THEN
+    CREATE POLICY "Group members can view each other" ON public.group_members FOR SELECT
+      USING (EXISTS (SELECT 1 FROM public.group_members gm2 WHERE gm2.group_id = group_id AND gm2.user_id = auth.uid()));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='group_members' AND policyname='Authenticated users can join groups') THEN
+    CREATE POLICY "Authenticated users can join groups" ON public.group_members FOR INSERT WITH CHECK (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='group_members' AND policyname='Users can leave groups') THEN
+    CREATE POLICY "Users can leave groups" ON public.group_members FOR DELETE USING (auth.uid() = user_id);
+  END IF;
+
+  -- RPC functions handled outside via CREATE OR REPLACE
 
 END $outer$;
 
 CREATE OR REPLACE FUNCTION public.increment_prayer_count(row_id UUID)
 RETURNS void AS $$
   UPDATE public.prayer_requests SET pray_count = pray_count + 1 WHERE id = row_id;
+$$ LANGUAGE sql SECURITY DEFINER;
+
+-- flag_prayer: inserts into prayer_flags (idempotent) and updates flag_count atomically
+CREATE OR REPLACE FUNCTION public.flag_prayer(p_prayer_id UUID)
+RETURNS INTEGER AS $$
+DECLARE
+  v_count INTEGER;
+BEGIN
+  INSERT INTO public.prayer_flags (prayer_id, user_id)
+  VALUES (p_prayer_id, auth.uid())
+  ON CONFLICT (prayer_id, user_id) DO NOTHING;
+
+  SELECT COUNT(*) INTO v_count FROM public.prayer_flags WHERE prayer_id = p_prayer_id;
+
+  UPDATE public.prayer_requests SET flag_count = v_count WHERE id = p_prayer_id;
+
+  RETURN v_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- get_chat_dates: returns distinct dates with chat messages for a user
+CREATE OR REPLACE FUNCTION public.get_chat_dates(p_user_id UUID)
+RETURNS TABLE(date TEXT) AS $$
+  SELECT DISTINCT created_at::date::text AS date
+  FROM public.chat_messages
+  WHERE user_id = p_user_id
+  ORDER BY 1 DESC;
 $$ LANGUAGE sql SECURITY DEFINER;
 
 CREATE OR REPLACE FUNCTION public.exec_sql(sql TEXT)
@@ -369,6 +534,8 @@ GRANT USAGE ON SCHEMA public TO anon, authenticated;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
 GRANT EXECUTE ON FUNCTION public.increment_prayer_count(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.flag_prayer(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_chat_dates(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.exec_sql(TEXT) TO service_role;
 `;
 }

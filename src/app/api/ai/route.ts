@@ -16,7 +16,7 @@ export const runtime = "edge";
 const DAILY_LIMIT = 100;
 const MAX_BODY_BYTES = 64_000;
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || process.env.NEXT_PUBLIC_OPENROUTER_API_KEY || "";
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? "";
 
 const SYSTEM_PROMPTS: Record<string, string> = {
   chat: `You are a faithful, warm, and knowledgeable Christian AI assistant for the Walk Daily app.
@@ -263,27 +263,23 @@ async function* streamOpenRouter(
 
     buffer += decoder.decode(value, { stream: true });
 
-    // Parse SSE events
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
+    // Parse SSE events — split on double-newline boundaries, then parse each independently
+    const events = buffer.split("\n\n");
+    buffer = events.pop() ?? "";
 
-    let dataBuffer = "";
-    for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        dataBuffer += line.slice(6);
+    for (const event of events) {
+      for (const line of event.split("\n")) {
+        if (!line.startsWith("data: ")) continue;
+        const data = line.slice(6).trim();
+        if (data === "[DONE]") return;
+        try {
+          const parsed = JSON.parse(data);
+          const delta = parsed?.choices?.[0]?.delta?.content;
+          if (delta) yield delta;
+        } catch {
+          // skip malformed JSON line
+        }
       }
-    }
-
-    if (dataBuffer.trim() === "[DONE]") {
-      return;
-    }
-
-    try {
-      const parsed = JSON.parse(dataBuffer);
-      const delta = parsed?.choices?.[0]?.delta?.content;
-      if (delta) yield delta;
-    } catch {
-      // skip malformed JSON chunks
     }
   }
 }

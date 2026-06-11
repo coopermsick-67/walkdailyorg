@@ -10,6 +10,7 @@ interface StreamCallbacks {
   onDelta: (text: string) => void;
   onDone: (fullText: string) => void;
   onError: (error: Error) => void;
+  onRateLimitRemaining?: (remaining: number) => void;
 }
 
 const API_TIMEOUT_MS = 30_000; // 30 seconds — matches OpenRouter default recommendation
@@ -50,6 +51,11 @@ export function streamAI(
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || `Request failed (${res.status})`);
+      }
+
+      const rlRemaining = res.headers.get("X-RateLimit-Remaining");
+      if (rlRemaining !== null && callbacks.onRateLimitRemaining) {
+        callbacks.onRateLimitRemaining(parseInt(rlRemaining, 10));
       }
 
       const reader = res.body?.getReader();

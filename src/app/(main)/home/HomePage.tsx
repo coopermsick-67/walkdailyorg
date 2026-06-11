@@ -177,48 +177,53 @@ export default function HomePage() {
   const [showOnFire, setShowOnFire] = useState(false);
   const [chaptersReadToday, setChaptersReadToday] = useState(0);
 
-  /* ---- Streak increment logic (Issue 12) ---- */
+  /* ---- Streak increment logic (timezone-aware) ---- */
   const incrementStreak = useCallback(async () => {
     try {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const now = new Date();
-      const today = now.toISOString().split("T")[0];
+      // Format current date in the user's local timezone
+      const toLocalDate = (d: Date) =>
+        d.toLocaleDateString("en-CA", { timeZone: tz }); // "YYYY-MM-DD"
+      const today = toLocalDate(now);
 
-      // Get current profile to check last_active_at
+      // Get current profile to check last_active_at and stored timezone
       const { data: profileData } = await supabase
         .from("profiles")
-        .select("streak_days, last_active_at")
+        .select("streak_days, last_active_at, timezone")
         .eq("id", user.id)
         .single();
 
       if (!profileData) return;
 
-      // If already active today, don't increment
+      // Store timezone if not already set
+      const tzUpdate: Record<string, unknown> = {};
+      if (!profileData.timezone) tzUpdate.timezone = tz;
+
+      // Determine the effective timezone for streak comparison
+      const effectiveTz = (profileData.timezone as string | null) ?? tz;
+
+      // If already active today (in user's local timezone), don't increment
       if (profileData.last_active_at) {
-        const lastActive = new Date(profileData.last_active_at).toISOString().split("T")[0];
-        if (lastActive === today) return;
+        const lastActiveLocal = new Date(profileData.last_active_at).toLocaleDateString("en-CA", { timeZone: effectiveTz });
+        if (lastActiveLocal === today) return;
       }
 
-      // Calculate yesterday's date
       const yesterday = new Date(now);
       yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split("T")[0];
+      const yesterdayStr = toLocalDate(yesterday);
 
       let newStreak: number;
       if (profileData.last_active_at) {
-        const lastActive = new Date(profileData.last_active_at).toISOString().split("T")[0];
-        if (lastActive === yesterdayStr) {
-          // Consecutive day: increment streak
-          newStreak = (profileData.streak_days || 0) + 1;
-        } else {
-          // Streak broken: reset to 1
-          newStreak = 1;
-        }
+        const lastActiveLocal = new Date(profileData.last_active_at).toLocaleDateString("en-CA", { timeZone: effectiveTz });
+        newStreak = lastActiveLocal === yesterdayStr
+          ? (profileData.streak_days || 0) + 1
+          : 1;
       } else {
-        // First time: start streak at 1
         newStreak = 1;
       }
 
@@ -227,6 +232,7 @@ export default function HomePage() {
         .update({
           streak_days: newStreak,
           last_active_at: now.toISOString(),
+          ...tzUpdate,
         })
         .eq("id", user.id)
         .select("display_name, streak_days, current_reading_book, current_reading_chapter")

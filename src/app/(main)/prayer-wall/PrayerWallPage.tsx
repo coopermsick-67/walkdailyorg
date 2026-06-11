@@ -178,8 +178,7 @@ export default function PrayerWallPage() {
   const [showStreakCelebration, setShowStreakCelebration] = useState(false);
   const [streakCelebrationData, setStreakCelebrationData] = useState<{ streak: number } | null>(null);
 
-  // Content warning filter
-  const [showSensitiveContent, setShowSensitiveContent] = useState(true);
+  // Content warning filter — true = show sensitive content blurred, false = hide entirely
   const [sensitiveContentWarning, setSensitiveContentWarning] = useState(true);
 
   /* ---- We only clean up on unmount, NOT on every render ---- */
@@ -462,14 +461,7 @@ export default function PrayerWallPage() {
         const client = createClient();
         await client.rpc("increment_prayer_count", { row_id: prayerId });
       } catch {
-        const client = createClient();
-        const p = prayers.find((pr) => pr.id === prayerId);
-        if (p) {
-          await client
-            .from("prayer_requests")
-            .update({ pray_count: p.pray_count + 1 })
-            .eq("id", prayerId);
-        }
+        // RPC failed — optimistic count is already shown; suppress stale-value fallback
       }
 
       // Track prayer streak
@@ -520,15 +512,10 @@ export default function PrayerWallPage() {
   const handleFlag = async (prayerId: string) => {
     try {
       const client = createClient();
-      const prayer = prayers.find((p) => p.id === prayerId);
-      if (!prayer) return;
+      const { data, error } = await client.rpc("flag_prayer", { p_prayer_id: prayerId });
+      if (error) throw error;
 
-      const newFlagCount = (prayer.flag_count || 0) + 1;
-      await client
-        .from("prayer_requests")
-        .update({ flag_count: newFlagCount })
-        .eq("id", prayerId);
-
+      const newFlagCount = (data as number | null) ?? 0;
       if (newFlagCount >= 5) {
         setPrayers((prev) => prev.filter((p) => p.id !== prayerId));
       } else {
@@ -780,7 +767,7 @@ export default function PrayerWallPage() {
               onFlag={handleFlag}
               onDelete={(id) => setDeleteConfirmId(id)}
               currentUserId={currentUserId}
-              showSensitive={showSensitiveContent}
+              showSensitive={sensitiveContentWarning}
             />
           ))}
           {prayerList.length > visibleCount && (
