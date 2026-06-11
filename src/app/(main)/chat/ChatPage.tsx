@@ -10,10 +10,19 @@ import { streamChat } from "@/lib/ai/client";
 import { useToast } from "@/components/ui/Toast";
 import { ChatMessageSkeleton } from "@/components/ui/Skeletons";
 import type { AIMessage } from "@/types/ai";
-import { Settings, MessageCircle, ChevronDown, BookOpen, Heart, Sparkles, MessageSquare, Brain, Share2, Briefcase, Flame, Trophy, X } from "lucide-react";
+import { Settings, MessageCircle, ChevronDown, BookOpen, Heart, Sparkles, MessageSquare, Brain, Share2, Briefcase, Flame, Trophy, X, Clock, ChevronLeft } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 const PAGE_SIZE = 50;
+
+function formatHistoryDate(dateStr: string): string {
+  const today = new Date().toISOString().split("T")[0];
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+  if (dateStr === today) return "Today";
+  if (dateStr === yesterday) return "Yesterday";
+  const d = new Date(dateStr + "T12:00:00");
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -174,6 +183,12 @@ export default function ChatPage() {
   // AI quota display
   const [aiQuotaRemaining, setAiQuotaRemaining] = useState<number | null>(null);
 
+  // History panel
+  const [showHistoryPanel, setShowHistoryPanel] = useState(false);
+  const [historyDates, setHistoryDates] = useState<string[]>([]);
+  const [loadingHistoryDates, setLoadingHistoryDates] = useState(false);
+  const [viewingDate, setViewingDate] = useState<string | null>(null);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const cancelRef = useRef<(() => void) | null>(null);
   const scrollPositionRef = useRef<{ top: number; height: number } | null>(null);
@@ -299,6 +314,63 @@ export default function ChatPage() {
     }
   }, []);
 
+  /** Fetch distinct dates that have messages, for the history panel. */
+  const fetchHistoryDates = useCallback(async () => {
+    setLoadingHistoryDates(true);
+    try {
+      const client = createClient();
+      const { data: { user } } = await client.auth.getUser();
+      if (!user) return;
+      const { data } = await client
+        .from("chat_messages")
+        .select("created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(500);
+      if (data) {
+        const seen = new Set<string>();
+        const dates: string[] = [];
+        for (const row of data) {
+          const d = new Date(row.created_at).toLocaleDateString("en-CA");
+          if (!seen.has(d)) { seen.add(d); dates.push(d); }
+        }
+        setHistoryDates(dates);
+      }
+    } catch { /* silent */ }
+    setLoadingHistoryDates(false);
+  }, []);
+
+  /** Load all messages from a specific local date. */
+  const fetchDateMessages = useCallback(async (date: string) => {
+    const client = createClient();
+    const { data: { user } } = await client.auth.getUser();
+    if (!user) return;
+
+    const start = new Date(date + "T00:00:00");
+    const end = new Date(date + "T00:00:00");
+    end.setDate(end.getDate() + 1);
+
+    const { data } = await client
+      .from("chat_messages")
+      .select("id, role, content, created_at")
+      .eq("user_id", user.id)
+      .gte("created_at", start.toISOString())
+      .lt("created_at", end.toISOString())
+      .order("created_at", { ascending: true })
+      .limit(200);
+
+    if (data) {
+      const mapped: AIMessage[] = data.map((m) => ({
+        id: m.id,
+        role: m.role as AIMessage["role"],
+        content: m.content,
+        created_at: m.created_at,
+      }));
+      setMessages(mapped);
+      setHasOlderMessages(false);
+    }
+  }, []);
+
   /** Load initial data */
   useEffect(() => {
     (async () => {
@@ -383,6 +455,7 @@ export default function ChatPage() {
                   : m,
               ),
             );
+            success("Saved");
           },
           onError: (error) => {
             setIsStreaming(false);
@@ -395,7 +468,7 @@ export default function ChatPage() {
 
       cancelRef.current = cancel;
     },
-    [isStreaming, verseMode, toastError],
+    [isStreaming, verseMode, toastError, success],
   );
 
   const handlePromptSelect = useCallback(
@@ -496,7 +569,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full">
+    <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full relative">
       {/* Chat Streak Celebration Overlay */}
       {showChatStreakCelebration && (
         <div
@@ -539,6 +612,69 @@ export default function ChatPage() {
               {getStreakCelebrationMessage(chatStreakCelebrationMilestone)}
             </p>
             <p className="text-white/40 text-sm mt-4">Tap anywhere to close</p>
+          </div>
+        </div>
+      )}
+
+      {/* History panel overlay */}
+      {showHistoryPanel && (
+        <div
+          className="absolute inset-0 z-40 flex flex-col"
+          style={{ background: "var(--surface-bg)" }}
+        >
+          <div
+            className="sticky top-0 px-4 py-3 flex items-center gap-3"
+            style={{ background: "var(--nav-bg)", borderBottom: "1px solid var(--nav-border)", backdropFilter: "blur(12px)" }}
+          >
+            <button
+              onClick={() => setShowHistoryPanel(false)}
+              className="p-2 rounded-lg transition-colors hover:opacity-70"
+              style={{ color: "var(--text-muted)", minWidth: 44, minHeight: 44 }}
+              aria-label="Close history"
+            >
+              <X size={18} />
+            </button>
+            <div>
+              <h2 className="text-base font-bold font-heading" style={{ color: "var(--text-primary)" }}>Chat History</h2>
+              <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Tap a date to load those messages</p>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+            {loadingHistoryDates ? (
+              <div className="space-y-3">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="rounded-2xl animate-pulse" style={{ background: "var(--surface-card)", height: 56 }} />
+                ))}
+              </div>
+            ) : historyDates.length === 0 ? (
+              <div className="flex flex-col items-center justify-center min-h-[40vh] text-center">
+                <Clock size={32} className="mb-3 opacity-30" style={{ color: "var(--text-muted)" }} />
+                <p className="text-sm" style={{ color: "var(--text-muted)" }}>No past conversations yet.</p>
+              </div>
+            ) : (
+              historyDates.map((date) => (
+                <button
+                  key={date}
+                  onClick={async () => {
+                    setShowHistoryPanel(false);
+                    setViewingDate(date);
+                    await fetchDateMessages(date);
+                  }}
+                  className="w-full text-left rounded-2xl px-4 py-3.5 flex items-center gap-3 transition-all duration-150 hover:scale-[1.01] active:scale-[0.99]"
+                  style={{ background: "var(--surface-card)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}
+                >
+                  <div
+                    className="w-9 h-9 flex-shrink-0 rounded-xl flex items-center justify-center"
+                    style={{ background: "rgba(26,58,110,0.07)", color: "var(--color-primary-500)" }}
+                  >
+                    <MessageCircle size={16} />
+                  </div>
+                  <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                    {formatHistoryDate(date)}
+                  </span>
+                </button>
+              ))
+            )}
           </div>
         </div>
       )}
@@ -604,6 +740,14 @@ export default function ChatPage() {
         </div>
         <div className="flex items-center gap-2">
           <VerseModeToggle enabled={verseMode} onToggle={setVerseMode} />
+          <button
+            onClick={() => { setShowHistoryPanel(true); fetchHistoryDates(); }}
+            className="p-2 rounded-lg transition-colors hover:opacity-70"
+            style={{ color: "var(--text-muted)" }}
+            aria-label="Chat history"
+          >
+            <Clock size={16} />
+          </button>
           {messages.length > 0 && (
             <button
               onClick={handleClearHistoryRequest}
@@ -624,6 +768,26 @@ export default function ChatPage() {
         role="log"
         aria-live="polite"
       >
+        {/* Viewing-date banner */}
+        {viewingDate && (
+          <div
+            className="flex items-center justify-between rounded-xl px-3 py-2 mb-1"
+            style={{ background: "var(--surface-card)", border: "1px solid var(--border)" }}
+          >
+            <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+              Viewing {formatHistoryDate(viewingDate)}
+            </span>
+            <button
+              onClick={async () => { setViewingDate(null); await fetchPage(null, false); }}
+              className="flex items-center gap-1 text-xs hover:opacity-70 transition-opacity"
+              style={{ color: "var(--color-primary-500)" }}
+            >
+              <ChevronLeft size={12} />
+              Back to today
+            </button>
+          </div>
+        )}
+
         {loadingHistory ? (
           <div className="space-y-4">
             <ChatMessageSkeleton variant="ai" />
