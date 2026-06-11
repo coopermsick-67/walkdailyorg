@@ -611,6 +611,25 @@ export default function ProfilePage() {
         )}
       </div>
 
+      {/* Quick links */}
+      <div
+        className="rounded-2xl p-4"
+        style={{
+          background: "var(--surface-card)",
+          boxShadow: "var(--shadow-sm)",
+          border: "1px solid var(--border)",
+        }}
+      >
+        <a
+          href="/memorize"
+          className="flex items-center justify-between px-3 py-3 rounded-xl transition-all hover:opacity-80"
+          style={{ color: "var(--text-primary)" }}
+        >
+          <span className="text-sm font-medium">Memorization</span>
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>→</span>
+        </a>
+      </div>
+
       {/* Sign Out */}
       <div
         className="rounded-2xl p-6"

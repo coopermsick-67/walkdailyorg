@@ -6,7 +6,7 @@ import { useBibleStore } from "@/lib/bible-store";
 import { streamExplainVerse } from "@/lib/ai/client";
 import { useToast } from "@/components/ui/Toast";
 import { createClient } from "@/lib/supabase/client";
-import { X, Bookmark, Copy, Share2, PenLine, Sparkles, Save } from "lucide-react";
+import { X, Bookmark, Copy, Share2, PenLine, Sparkles, Save, Brain } from "lucide-react";
 
 const HIGHLIGHT_COLORS = [
   { id: "yellow", bg: "#fef08a", label: "Yellow" },
@@ -37,6 +37,7 @@ export default function VerseActions({
   const [aiExplanation, setAiExplanation] = useState<string | null>(null);
   const [isExplaining, setIsExplaining] = useState(false);
   const [isSavingJournal, setIsSavingJournal] = useState(false);
+  const [isMemorizing, setIsMemorizing] = useState(false);
 
   // Escape key closes the bottom sheet, and we trap Tab focus inside it.
   const handleKeyDown = useCallback(
@@ -126,6 +127,47 @@ export default function VerseActions({
     await toggleBookmark(verse.verse, verse.text, verse.reference);
     onClose();
   };
+
+  const handleMemorize = useCallback(async () => {
+    if (isMemorizing) return;
+    setIsMemorizing(true);
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { toastError("Please sign in"); setIsMemorizing(false); return; }
+
+      const today = new Date().toISOString().slice(0, 10);
+      const { data: existing } = await supabase
+        .from("verse_memory")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("verse_reference", verse.reference)
+        .maybeSingle();
+
+      if (existing) {
+        success(`${verse.reference} is already in your memory deck`);
+        setIsMemorizing(false);
+        onClose();
+        return;
+      }
+
+      const { error } = await supabase.from("verse_memory").insert({
+        user_id: user.id,
+        verse_reference: verse.reference,
+        verse_text: verse.text,
+        ease_factor: 2.5,
+        interval_days: 0,
+        repetitions: 0,
+        next_review: today,
+      });
+      if (error) throw error;
+      success(`Added ${verse.reference} to your memory deck`);
+    } catch {
+      toastError("Failed to add verse to memory deck");
+    }
+    setIsMemorizing(false);
+    onClose();
+  }, [isMemorizing, verse.reference, verse.text, success, toastError, onClose]);
 
   const handleAskAI = useCallback(async () => {
     if (isExplaining) return;
@@ -294,7 +336,7 @@ export default function VerseActions({
         </div>
 
         {/* Action buttons */}
-        <div className="grid grid-cols-4 gap-3 mb-4">
+        <div className="grid grid-cols-5 gap-2 mb-4">
           <button
             ref={firstFocusableRef}
             onClick={handleBookmark}
@@ -350,6 +392,20 @@ export default function VerseActions({
           >
             <PenLine size={20} />
             <span className="text-xs">Journal</span>
+          </button>
+
+          <button
+            onClick={handleMemorize}
+            disabled={isMemorizing}
+            className="flex flex-col items-center gap-1 p-3 rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 disabled:opacity-50"
+            style={{
+              background: "var(--surface-elevated)",
+              color: "var(--text-secondary)",
+            }}
+            aria-label="Add to memorize"
+          >
+            <Brain size={20} />
+            <span className="text-xs">Memorize</span>
           </button>
         </div>
 

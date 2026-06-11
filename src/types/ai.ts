@@ -69,10 +69,10 @@ export interface MemoryCard {
   id: string;
   verse_reference: string;
   verse_text: string;
-  exercises: MemoryExercise[];
-  mastery: number;
-  next_review: string;
+  ease_factor: number;
   interval_days: number;
+  repetitions: number;
+  next_review: string;
 }
 
 export interface MemoryExercise {

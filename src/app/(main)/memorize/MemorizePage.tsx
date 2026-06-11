@@ -1,29 +1,63 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { streamMemoryQuiz } from "@/lib/ai/client";
+import { getVerseByReference, DEFAULT_BIBLE_ID } from "@/lib/bible-api";
 import { useToast } from "@/components/ui/Toast";
-import type { MemoryCard, MemoryExercise } from "@/types/ai";
 import {
   Brain,
   Plus,
   ChevronRight,
-  RotateCcw,
-  Trophy,
   Flame,
-  CheckCircle2,
-  XCircle,
-  Sparkles,
   Loader2,
   Trash2,
+  BookOpen,
+  Eye,
+  CheckCircle2,
 } from "lucide-react";
 
-const MAX_INTERVAL = 30;
+/* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
+
+interface MemoryCard {
+  id: string;
+  verse_reference: string;
+  verse_text: string;
+  ease_factor: number;
+  interval_days: number;
+  repetitions: number;
+  next_review: string;
+}
 
 /* ------------------------------------------------------------------ */
-/*  SRS algorithm helpers                                              */
+/*  SM-2 lite algorithm                                                */
 /* ------------------------------------------------------------------ */
+
+function sm2Update(
+  ease: number,
+  interval: number,
+  repetitions: number,
+  grade: "hard" | "good" | "easy",
+): { ease: number; interval: number; repetitions: number } {
+  if (grade === "hard") {
+    return { ease: Math.max(1.3, ease - 0.15), interval: 1, repetitions: 0 };
+  }
+  const newReps = repetitions + 1;
+  const newEase = grade === "easy" ? Math.min(3.0, ease + 0.15) : ease;
+  let newInterval: number;
+  if (repetitions === 0) {
+    newInterval = 1;
+  } else if (repetitions === 1) {
+    newInterval = 6;
+  } else {
+    newInterval = Math.max(1, Math.round(interval * newEase));
+  }
+  if (grade === "easy") {
+    newInterval = Math.max(newInterval, Math.round(newInterval * 1.3));
+  }
+  return { ease: newEase, interval: newInterval, repetitions: newReps };
+}
 
 function nextReviewDate(intervalDays: number): string {
   const d = new Date();
@@ -31,134 +65,126 @@ function nextReviewDate(intervalDays: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function calculateNextInterval(
-  currentInterval: number,
-  score: number,
-): number {
-  if (score >= 80) {
-    return Math.min(currentInterval * 2, MAX_INTERVAL);
-  }
-  return 1; // reset
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
 }
 
-function isDue(card: MemoryCard): boolean {
-  const today = new Date().toISOString().slice(0, 10);
-  return card.next_review <= today;
-}
+/* ------------------------------------------------------------------ */
+/*  Popular verses                                                     */
+/* ------------------------------------------------------------------ */
+
+const POPULAR_VERSES = [
+  "John 3:16",
+  "Romans 8:28",
+  "Philippians 4:13",
+  "Jeremiah 29:11",
+  "Proverbs 3:5-6",
+  "Psalm 23:1",
+  "Isaiah 41:10",
+  "Ephesians 2:8-9",
+  "Matthew 6:33",
+  "Romans 12:2",
+  "1 Corinthians 13:4-7",
+  "Psalm 46:10",
+];
 
 /* ------------------------------------------------------------------ */
 /*  Verse picker modal                                                 */
 /* ------------------------------------------------------------------ */
 
-const POPULAR_VERSES = [
-  { ref: "John 3:16", text: "For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life." },
-  { ref: "Romans 8:28", text: "And we know that in all things God works for the good of those who love him, who have been called according to his purpose." },
-  { ref: "Philippians 4:13", text: "I can do all this through him who gives me strength." },
-  { ref: "Jeremiah 29:11", text: "For I know the plans I have for you, declares the Lord, plans to prosper you and not to harm you, plans to give you hope and a future." },
-  { ref: "Proverbs 3:5-6", text: "Trust in the Lord with all your heart and lean not on your own understanding; in all your ways submit to him, and he will make your paths straight." },
-  { ref: "Psalm 23:1", text: "The Lord is my shepherd, I lack nothing." },
-  { ref: "Isaiah 41:10", text: "So do not fear, for I am with you; do not be dismayed, for I am your God. I will strengthen you and help you." },
-  { ref: "Ephesians 2:8", text: "For it is by grace you have been saved, through faith - and this is not from yourselves, it is the gift of God." },
-];
-
-interface VersePickerProps {
+function VersePicker({
+  onSelect,
+  onClose,
+  loading,
+}: {
   onSelect: (ref: string) => void;
   onClose: () => void;
-  customRef: string;
-  onCustomRefChange: (ref: string) => void;
-}
+  loading: boolean;
+}) {
+  const [customRef, setCustomRef] = useState("");
 
-function VersePicker({ onSelect, onClose, customRef, onCustomRefChange }: VersePickerProps) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)" }}
       onClick={onClose}
-      role="dialog"
-      aria-label="Pick a verse to memorize"
     >
       <div
-        className="rounded-3xl p-5 w-full max-w-md max-h-[80vh] overflow-y-auto animate-fade-in-up"
-        style={{
-          background: "var(--surface)",
-          boxShadow: "var(--shadow-lg)",
-          border: "1px solid var(--border)",
-        }}
+        className="w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl p-6 max-h-[85vh] overflow-y-auto"
+        style={{ background: "var(--surface-card)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h3
-          className="font-heading text-lg font-bold mb-1"
+        <h2
+          className="text-xl font-bold font-heading mb-1"
           style={{ color: "var(--text-primary)" }}
         >
-          Pick a Verse
-        </h3>
-        <p className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>
-          Choose a popular verse or enter your own reference.
+          Add a Verse
+        </h2>
+        <p className="text-sm mb-5" style={{ color: "var(--text-secondary)" }}>
+          Pick a popular verse or type any reference.
         </p>
 
         {/* Custom input */}
-        <div className="flex gap-2 mb-4">
+        <div className="flex gap-2 mb-5">
           <input
             type="text"
             value={customRef}
-            onChange={(e) => onCustomRefChange(e.target.value)}
-            placeholder="e.g. John 1:1"
-            className="flex-1 px-3 py-2 rounded-xl text-sm outline-none"
+            onChange={(e) => setCustomRef(e.target.value)}
+            placeholder="e.g. John 1:1-3"
+            className="flex-1 px-3 py-2.5 rounded-xl text-sm outline-none"
             style={{
-              background: "var(--input-bg)",
-              border: "1px solid var(--input-border)",
+              background: "var(--surface-elevated)",
+              border: "1px solid var(--border)",
               color: "var(--text-primary)",
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && customRef.trim() && !loading) {
+                onSelect(customRef.trim());
+              }
             }}
           />
           <button
             onClick={() => {
-              if (customRef.trim()) onSelect(customRef.trim());
+              if (customRef.trim() && !loading) onSelect(customRef.trim());
             }}
-            disabled={!customRef.trim()}
-            className="px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-50"
+            disabled={!customRef.trim() || loading}
+            className="px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 flex items-center gap-1.5"
             style={{
               background: "var(--color-primary-500)",
               color: "#fff",
             }}
           >
-            Add
+            {loading ? <Loader2 size={14} className="animate-spin" /> : "Add"}
           </button>
         </div>
 
-        {/* Popular verses */}
-        <div className="space-y-2">
-          {POPULAR_VERSES.map((v) => (
+        {/* Popular */}
+        <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>
+          Popular verses
+        </p>
+        <div className="space-y-1.5">
+          {POPULAR_VERSES.map((ref) => (
             <button
-              key={v.ref}
-              onClick={() => onSelect(v.ref)}
-              className="w-full text-left p-3 rounded-xl transition-all duration-200 hover:scale-[1.01] active:scale-[0.99]"
+              key={ref}
+              onClick={() => !loading && onSelect(ref)}
+              disabled={loading}
+              className="w-full text-left px-4 py-3 rounded-xl flex items-center justify-between transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
               style={{
                 background: "var(--surface-elevated)",
                 border: "1px solid var(--border)",
               }}
             >
-              <div className="flex items-center justify-between">
-                <span
-                  className="text-sm font-semibold"
-                  style={{ color: "var(--color-primary-500)" }}
-                >
-                  {v.ref}
-                </span>
-                <ChevronRight size={14} style={{ color: "var(--text-muted)" }} />
-              </div>
-              <p
-                className="text-xs mt-1 line-clamp-2"
-                style={{ color: "var(--text-muted)" }}
-              >
-                {v.text}
-              </p>
+              <span className="text-sm font-medium" style={{ color: "var(--color-primary-500)" }}>
+                {ref}
+              </span>
+              <ChevronRight size={14} style={{ color: "var(--text-muted)" }} />
             </button>
           ))}
         </div>
 
         <button
           onClick={onClose}
-          className="w-full mt-4 py-2 rounded-xl text-sm font-medium hover:opacity-80"
+          className="w-full mt-4 py-2.5 rounded-xl text-sm font-medium"
           style={{
             background: "var(--surface-elevated)",
             color: "var(--text-secondary)",
@@ -172,874 +198,509 @@ function VersePicker({ onSelect, onClose, customRef, onCustomRefChange }: VerseP
 }
 
 /* ------------------------------------------------------------------ */
-/*  Main component                                                     */
+/*  Review card                                                        */
 /* ------------------------------------------------------------------ */
 
-type View = "list" | "quiz" | "adding";
+function ReviewCard({
+  card,
+  total,
+  current,
+  onGrade,
+}: {
+  card: MemoryCard;
+  total: number;
+  current: number;
+  onGrade: (grade: "hard" | "good" | "easy") => void;
+}) {
+  const [revealed, setRevealed] = useState(false);
+
+  useEffect(() => {
+    setRevealed(false);
+  }, [card.id]);
+
+  const firstLine = card.verse_text
+    ? card.verse_text.slice(0, 60) + (card.verse_text.length > 60 ? "…" : "")
+    : "";
+
+  return (
+    <div className="flex-1 flex flex-col max-w-lg mx-auto w-full px-4 py-6">
+      {/* Progress */}
+      <div className="flex items-center gap-3 mb-6">
+        <div
+          className="flex-1 h-1.5 rounded-full overflow-hidden"
+          style={{ background: "var(--surface-elevated)" }}
+        >
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{
+              width: `${(current / total) * 100}%`,
+              background: "var(--color-accent-500)",
+            }}
+          />
+        </div>
+        <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+          {current}/{total}
+        </span>
+      </div>
+
+      {/* Card face */}
+      <div
+        className="rounded-3xl p-7 mb-6 flex-1 flex flex-col"
+        style={{
+          background: "var(--surface-card)",
+          boxShadow: "var(--shadow-lg)",
+          border: "1px solid var(--border)",
+        }}
+      >
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center mb-5"
+          style={{ background: "rgba(26,58,110,0.08)" }}
+        >
+          <BookOpen size={20} style={{ color: "var(--color-primary-500)" }} />
+        </div>
+
+        <h2
+          className="font-heading text-2xl font-bold mb-3"
+          style={{ color: "var(--color-primary-500)" }}
+        >
+          {card.verse_reference}
+        </h2>
+
+        {!revealed ? (
+          <>
+            {firstLine && (
+              <p className="text-base leading-relaxed mb-auto opacity-60" style={{ color: "var(--text-primary)" }}>
+                {firstLine}
+              </p>
+            )}
+            <button
+              onClick={() => setRevealed(true)}
+              className="mt-6 flex items-center justify-center gap-2 py-4 rounded-2xl w-full font-semibold text-sm transition-all hover:opacity-90 active:scale-[0.98]"
+              style={{
+                background: "linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))",
+                color: "#fff",
+              }}
+            >
+              <Eye size={18} />
+              Tap to Reveal
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-base leading-relaxed flex-1" style={{ color: "var(--text-primary)" }}>
+              {card.verse_text || "(Verse text not loaded)"}
+            </p>
+
+            <div className="mt-6 grid grid-cols-3 gap-3">
+              <button
+                onClick={() => onGrade("hard")}
+                className="py-3.5 rounded-2xl text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.97]"
+                style={{
+                  background: "rgba(220,38,38,0.1)",
+                  color: "#dc2626",
+                  border: "1.5px solid rgba(220,38,38,0.25)",
+                }}
+              >
+                Hard
+              </button>
+              <button
+                onClick={() => onGrade("good")}
+                className="py-3.5 rounded-2xl text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.97]"
+                style={{
+                  background: "rgba(59,130,246,0.1)",
+                  color: "#2563eb",
+                  border: "1.5px solid rgba(59,130,246,0.25)",
+                }}
+              >
+                Good
+              </button>
+              <button
+                onClick={() => onGrade("easy")}
+                className="py-3.5 rounded-2xl text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.97]"
+                style={{
+                  background: "rgba(22,163,74,0.1)",
+                  color: "#16a34a",
+                  border: "1.5px solid rgba(22,163,74,0.25)",
+                }}
+              >
+                Easy
+              </button>
+            </div>
+
+            <p className="text-center text-xs mt-3" style={{ color: "var(--text-muted)" }}>
+              Hard → try again tomorrow · Good → regular interval · Easy → longer interval
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Main page                                                          */
+/* ------------------------------------------------------------------ */
 
 export default function MemorizePage() {
   const supabase = createClient();
   const { success, error: toastError } = useToast();
 
-  const [view, setView] = useState<View>("list");
   const [cards, setCards] = useState<MemoryCard[]>([]);
   const [loading, setLoading] = useState(true);
+  const [addingVerse, setAddingVerse] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
-  const [customRef, setCustomRef] = useState("");
+  const [view, setView] = useState<"list" | "review">("list");
+  const [reviewQueue, setReviewQueue] = useState<MemoryCard[]>([]);
+  const [reviewIdx, setReviewIdx] = useState(0);
 
-  // Quiz state
-  const [activeCard, setActiveCard] = useState<MemoryCard | null>(null);
-  const [currentExerciseIdx, setCurrentExerciseIdx] = useState(0);
-  const [quizAnswer, setQuizAnswer] = useState("");
-  const [selectedOption, setSelectedOption] = useState<number | null>(null);
-  const [quizResults, setQuizResults] = useState<{ correct: boolean; exercise: MemoryExercise }[]>([]);
-  const [quizDone, setQuizDone] = useState(false);
-  const [aiQuizText, setAiQuizText] = useState("");
-  const [isLoadingQuiz, setIsLoadingQuiz] = useState(false);
+  const loadCards = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setLoading(false); return; }
 
-  // Load cards on mount
-  useEffect(() => {
-    async function load() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setLoading(false); return; }
+    const { data } = await supabase
+      .from("verse_memory")
+      .select("id, verse_reference, verse_text, ease_factor, interval_days, repetitions, next_review")
+      .eq("user_id", user.id)
+      .order("next_review", { ascending: true });
 
-      // Fetch from verse_memory table
-      const { data } = await supabase
-        .from("verse_memory")
-        .select("id, verse_reference, verse_text, mastery, next_review, interval_days, exercises")
-        .eq("user_id", user.id)
-        .order("next_review", { ascending: true });
-
-      if (data) {
-        setCards(
-          data.map((c) => ({
-            id: c.id,
-            verse_reference: c.verse_reference,
-            verse_text: c.verse_text || "",
-            mastery: c.mastery ?? 0,
-            next_review: c.next_review ?? new Date().toISOString().slice(0, 10),
-            interval_days: c.interval_days ?? 1,
-            exercises: (c.exercises as unknown as MemoryExercise[]) ?? [],
-          })),
-        );
-      }
-      setLoading(false);
-    }
-    load();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    setCards(
+      (data ?? []).map((c) => ({
+        id: c.id,
+        verse_reference: c.verse_reference,
+        verse_text: c.verse_text ?? "",
+        ease_factor: c.ease_factor ?? 2.5,
+        interval_days: c.interval_days ?? 1,
+        repetitions: c.repetitions ?? 0,
+        next_review: c.next_review ?? today(),
+      })),
+    );
+    setLoading(false);
   }, [supabase]);
 
-  const dueCards = cards.filter(isDue);
-  const masteredCards = cards.filter((c) => c.mastery >= 80);
-  const learningCards = cards.filter((c) => c.mastery > 0 && c.mastery < 80);
-  const newCards = cards.filter((c) => c.mastery === 0);
+  useEffect(() => { loadCards(); }, [loadCards]);
+
+  const dueCards = cards.filter((c) => c.next_review <= today());
 
   const handleAddVerse = useCallback(
     async (ref: string) => {
-      const existing = cards.find((c) => c.verse_reference === ref);
+      const existing = cards.find((c) => c.verse_reference.toLowerCase() === ref.toLowerCase());
       if (existing) {
-        toastError("This verse is already in your list");
-        setShowPicker(false);
+        toastError("That verse is already in your deck");
         return;
       }
 
+      setAddingVerse(true);
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) { setAddingVerse(false); return; }
 
-      setShowPicker(false);
-      setAiQuizText("");
-      setIsLoadingQuiz(true);
-
-      // Use the text from popular verses, or a placeholder
-      const popular = POPULAR_VERSES.find((v) => v.ref === ref);
-      const verseText = popular?.text || "";
-
-      // Try to generate exercises via AI
+      let verseText = "";
       try {
-        const cancel = streamMemoryQuiz(ref, {
-          onDelta: (delta) => setAiQuizText((prev) => prev + delta),
-          onDone: async (fullText) => {
-            setIsLoadingQuiz(false);
-            let exercises: MemoryExercise[] = [];
-            try {
-              // Try to parse JSON from the AI response
-              const jsonMatch = fullText.match(/\{[\s\S]*\}/);
-              if (jsonMatch) {
-                const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
-                // Convert AI JSON format to our MemoryExercise format
-                exercises = [
-                  ...((parsed.fill_blanks as Array<{ text: string; answer: string }> | undefined) || []).map((e) => ({
-                    type: "fill_blank" as const,
-                    question: e.text,
-                    answer: e.answer,
-                    hint: e.answer,
-                  })),
-                  ...((parsed.word_scrambles as Array<{ scrambled: string; answer: string }> | undefined) || []).map((e) => ({
-                    type: "word_scramble" as const,
-                    question: `Unscramble: ${e.scrambled}`,
-                    answer: e.answer,
-                  })),
-                  ...((parsed.meaning_questions as Array<{ question: string; options: string[]; answer_index: number }> | undefined) || []).map((e) => ({
-                    type: "meaning_match" as const,
-                    question: e.question,
-                    options: e.options,
-                    answer: String(e.answer_index ?? 0),
-                  })),
-                ];
-              }
-            } catch {
-              // If AI parsing fails, use fallback exercises
-            }
-
-            // Fallback if no exercises were parsed
-            if (exercises.length === 0 && verseText) {
-              const words = verseText.split(" ");
-              const blankIdx = Math.min(3, Math.floor(words.length / 2));
-              const blankWord = words[blankIdx];
-              exercises = [
-                {
-                  type: "fill_blank",
-                  question: words.map((w, i) => i === blankIdx ? "_____" : w).join(" "),
-                  answer: blankWord,
-                },
-                {
-                  type: "word_scramble",
-                  question: `Unscramble: ${verseText.split(" ").slice(0, 4).join(" ").split("").reverse().join("")}`,
-                  answer: verseText.split(" ").slice(0, 4).join(" "),
-                },
-                {
-                  type: "meaning_match",
-                  question: `What is the main theme of ${ref}?`,
-                  options: [
-                    "God's love and salvation",
-                    "Human strength",
-                    "Worldly wisdom",
-                    "Historical events",
-                  ],
-                  answer: "0",
-                },
-              ];
-            }
-
-            const newCard: MemoryCard = {
-              id: crypto.randomUUID(),
-              verse_reference: ref,
-              verse_text: verseText,
-              exercises,
-              mastery: 0,
-              next_review: new Date().toISOString().slice(0, 10),
-              interval_days: 1,
-            };
-
-            // Save to Supabase
-            const { data: saved } = await supabase
-              .from("verse_memory")
-              .insert({
-                user_id: user.id,
-                verse_reference: ref,
-                verse_text: verseText,
-                exercises: exercises as unknown as Record<string, unknown>,
-              })
-              .select("id")
-              .single();
-
-            if (saved?.id) {
-              newCard.id = saved.id;
-              setCards((prev) => [...prev, newCard]);
-              success(`Added ${ref} to your memory cards!`);
-            }
-          },
-          onError: () => {
-            setIsLoadingQuiz(false);
-            // Add card without AI exercises
-            const newCard: MemoryCard = {
-              id: crypto.randomUUID(),
-              verse_reference: ref,
-              verse_text: verseText,
-              exercises: [],
-              mastery: 0,
-              next_review: new Date().toISOString().slice(0, 10),
-              interval_days: 1,
-            };
-            setCards((prev) => [...prev, newCard]);
-            success(`Added ${ref} (exercises will be generated on your next review)`);
-          },
-        });
+        const fetched = await getVerseByReference(DEFAULT_BIBLE_ID, ref);
+        if (fetched?.text) verseText = fetched.text;
       } catch {
-        setIsLoadingQuiz(false);
-        // Still add the card even if AI fails
-        const newCard: MemoryCard = {
-          id: crypto.randomUUID(),
+        // continue without text
+      }
+
+      const { data: saved, error } = await supabase
+        .from("verse_memory")
+        .insert({
+          user_id: user.id,
           verse_reference: ref,
           verse_text: verseText,
-          exercises: [],
-          mastery: 0,
-          next_review: new Date().toISOString().slice(0, 10),
-          interval_days: 1,
-        };
-        setCards((prev) => [...prev, newCard]);
+          ease_factor: 2.5,
+          interval_days: 0,
+          repetitions: 0,
+          next_review: today(),
+        })
+        .select("id, verse_reference, verse_text, ease_factor, interval_days, repetitions, next_review")
+        .single();
+
+      setAddingVerse(false);
+      setShowPicker(false);
+
+      if (error || !saved) {
+        toastError("Failed to add verse");
+        return;
       }
+
+      const newCard: MemoryCard = {
+        id: saved.id,
+        verse_reference: saved.verse_reference,
+        verse_text: saved.verse_text ?? "",
+        ease_factor: saved.ease_factor ?? 2.5,
+        interval_days: saved.interval_days ?? 0,
+        repetitions: saved.repetitions ?? 0,
+        next_review: saved.next_review ?? today(),
+      };
+
+      setCards((prev) => [newCard, ...prev]);
+      success(`Added ${ref}${verseText ? "" : " (verse text couldn't be loaded)"}`);
     },
     [cards, supabase, success, toastError],
   );
 
-  const handleStartQuiz = useCallback((card: MemoryCard) => {
-    if (card.exercises.length === 0) {
-      toastError("No exercises available. Try adding a different verse.");
-      return;
-    }
-    setActiveCard(card);
-    setCurrentExerciseIdx(0);
-    setQuizAnswer("");
-    setSelectedOption(null);
-    setQuizResults([]);
-    setQuizDone(false);
-    setView("quiz");
-  }, [toastError]);
+  const handleStartReview = useCallback(() => {
+    if (dueCards.length === 0) return;
+    setReviewQueue([...dueCards]);
+    setReviewIdx(0);
+    setView("review");
+  }, [dueCards]);
 
-  const handleSubmitAnswer = useCallback(() => {
-    if (!activeCard) return;
-    const exercise = activeCard.exercises[currentExerciseIdx];
-    if (!exercise) return;
+  const handleGrade = useCallback(
+    async (grade: "hard" | "good" | "easy") => {
+      const card = reviewQueue[reviewIdx];
+      if (!card) return;
 
-    let correct = false;
-    if (exercise.type === "meaning_match") {
-      correct = selectedOption !== null && String(selectedOption) === exercise.answer;
-    } else {
-      correct = quizAnswer.trim().toLowerCase() === exercise.answer.trim().toLowerCase();
-    }
+      const { ease, interval, repetitions } = sm2Update(
+        card.ease_factor,
+        card.interval_days,
+        card.repetitions,
+        grade,
+      );
+      const nextReview = nextReviewDate(interval);
 
-    setQuizResults((prev) => [...prev, { correct, exercise }]);
-
-    if (currentExerciseIdx + 1 >= activeCard.exercises.length) {
-      // Quiz complete
-      setQuizDone(true);
-    } else {
-      // Next exercise
-      setCurrentExerciseIdx((i) => i + 1);
-      setQuizAnswer("");
-      setSelectedOption(null);
-    }
-  }, [activeCard, currentExerciseIdx, quizAnswer, selectedOption]);
-
-  const handleQuizComplete = useCallback(async () => {
-    if (!activeCard) return;
-
-    const correctCount = quizResults.filter((r) => r.correct).length;
-    const totalCount = quizResults.length;
-    const score = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
-
-    // Update mastery using exponential moving average
-    const newMastery = Math.round(activeCard.mastery * 0.5 + score * 0.5);
-
-    const newInterval = calculateNextInterval(
-      activeCard.interval_days,
-      score,
-    );
-
-    const nextReview = nextReviewDate(newInterval);
-
-    // Update in Supabase
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
       await supabase
         .from("verse_memory")
-        .update({
-          mastery: newMastery,
-          interval_days: newInterval,
-          next_review: nextReview,
-        })
-        .eq("id", activeCard.id);
+        .update({ ease_factor: ease, interval_days: interval, repetitions, next_review: nextReview })
+        .eq("id", card.id);
+
+      setCards((prev) =>
+        prev.map((c) =>
+          c.id === card.id
+            ? { ...c, ease_factor: ease, interval_days: interval, repetitions, next_review: nextReview }
+            : c,
+        ),
+      );
+
+      if (reviewIdx + 1 >= reviewQueue.length) {
+        setView("list");
+        success("Review complete! Great job.");
+      } else {
+        setReviewIdx((i) => i + 1);
+      }
+    },
+    [reviewQueue, reviewIdx, supabase, success],
+  );
+
+  const handleDelete = useCallback(
+    async (id: string) => {
+      await supabase.from("verse_memory").delete().eq("id", id);
+      setCards((prev) => prev.filter((c) => c.id !== id));
+    },
+    [supabase],
+  );
+
+  /* ---------- Review view ---------- */
+  if (view === "review") {
+    const currentCard = reviewQueue[reviewIdx];
+    if (!currentCard) {
+      setView("list");
+      return null;
     }
-
-    setCards((prev) =>
-      prev.map((c) =>
-        c.id === activeCard.id
-          ? { ...c, mastery: newMastery, next_review: nextReview, interval_days: newInterval }
-          : c,
-      ),
-    );
-
-    success(
-      `Quiz complete! Score: ${score}% - ${score >= 80 ? "Great job! Interval increased." : "Keep practicing! Back to daily reviews."}`,
-    );
-  }, [activeCard, quizResults, supabase, success]);
-
-  const handleMastered = useCallback(async (cardId: string) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      await supabase
-        .from("verse_memory")
-        .delete()
-        .eq("id", cardId);
-    }
-    setCards((prev) => prev.filter((c) => c.id !== cardId));
-    success("Verse marked as mastered! Well done!");
-  }, [supabase, success]);
-
-  return (
-    <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full">
-      {/* Header */}
-      <div
-        className="sticky top-0 z-30 px-4 py-3 flex items-center justify-between"
-        style={{
-          background: "var(--nav-bg)",
-          borderBottom: "1px solid var(--nav-border)",
-          backdropFilter: "blur(12px)",
-        }}
-      >
-        <div className="flex items-center gap-2">
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center"
-            style={{
-              background:
-                "linear-gradient(135deg, var(--color-primary-500), var(--color-primary-700))",
-            }}
+    return (
+      <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full">
+        <div
+          className="sticky top-0 z-30 px-4 py-3 flex items-center justify-between"
+          style={{
+            background: "var(--nav-bg)",
+            borderBottom: "1px solid var(--nav-border)",
+            backdropFilter: "blur(12px)",
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <Brain size={18} style={{ color: "var(--color-primary-500)" }} />
+            <span className="font-heading font-bold text-base" style={{ color: "var(--text-primary)" }}>
+              Review
+            </span>
+          </div>
+          <button
+            onClick={() => setView("list")}
+            className="text-xs font-medium"
+            style={{ color: "var(--text-muted)" }}
           >
-            <Brain size={16} color="#fff" />
-          </div>
-          <div>
-            <h1
-              className="text-base font-bold font-heading"
-              style={{ color: "var(--text-primary)" }}
-            >
-              Verse Memory
-            </h1>
-            <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-              Spaced repetition
-            </p>
-          </div>
+            Exit
+          </button>
         </div>
-        {view === "list" && (
+        <ReviewCard
+          card={currentCard}
+          total={reviewQueue.length}
+          current={reviewIdx}
+          onGrade={handleGrade}
+        />
+      </div>
+    );
+  }
+
+  /* ---------- List view ---------- */
+  return (
+    <>
+      <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full">
+        {/* Header */}
+        <div
+          className="sticky top-0 z-30 px-4 py-3 flex items-center justify-between"
+          style={{
+            background: "var(--nav-bg)",
+            borderBottom: "1px solid var(--nav-border)",
+            backdropFilter: "blur(12px)",
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <Brain size={18} style={{ color: "var(--color-primary-500)" }} />
+            <h1 className="font-heading font-bold text-base" style={{ color: "var(--text-primary)" }}>
+              Memorize
+            </h1>
+          </div>
           <button
             onClick={() => setShowPicker(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 hover:scale-105 active:scale-95"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
             style={{
               background: "var(--color-primary-500)",
               color: "#fff",
-              boxShadow: "0 2px 8px rgba(26,58,110,0.2)",
             }}
           >
             <Plus size={14} />
             Add Verse
           </button>
-        )}
-        {view === "quiz" && !quizDone && (
-          <button
-            onClick={() => setView("list")}
-            className="text-xs font-medium hover:opacity-70"
-            style={{ color: "var(--text-muted)" }}
-          >
-            Exit Quiz
-          </button>
-        )}
-      </div>
+        </div>
 
-      {/* Content */}
-      <div className="flex-1 px-4 py-4 overflow-y-auto">
-        {/* ======= QUIZ VIEW ======= */}
-        {view === "quiz" && activeCard && (
-          <div>
-            {/* Verse being quizzed */}
-            <div
-              className="rounded-2xl p-5 mb-6"
-              style={{
-                background:
-                  "linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))",
-                boxShadow: "0 4px 16px rgba(26,58,110,0.2)",
-              }}
-            >
-              <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "rgba(255,255,255,0.6)" }}>
-                Memorizing
-              </p>
-              <h2 className="font-heading text-white text-lg font-bold mb-1">
-                {activeCard.verse_reference}
-              </h2>
-              <p style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, lineHeight: 1.7 }}>
-                {activeCard.verse_text}
-              </p>
-            </div>
-
-            {/* Quiz done */}
-            {quizDone ? (
-              <div className="text-center py-8 animate-fade-in-up">
-                <Trophy
-                  size={48}
-                  className="mx-auto mb-4"
-                  style={{ color: "var(--color-accent-500)" }}
-                />
-                <h2
-                  className="font-heading text-2xl font-bold mb-2"
-                  style={{ color: "var(--text-primary)" }}
-                >
-                  Quiz Complete!
-                </h2>
-                <p
-                  className="text-sm mb-6"
-                  style={{ color: "var(--text-secondary)" }}
-                >
-                  You got{" "}
-                  <span className="font-bold" style={{ color: "var(--color-accent-500)" }}>
-                    {quizResults.filter((r) => r.correct).length}
-                  </span>{" "}
-                  out of{" "}
-                  <span className="font-bold">{quizResults.length}</span> correct
-                </p>
-
-                {/* Results breakdown */}
-                <div className="max-w-sm mx-auto space-y-2 mb-6">
-                  {quizResults.map((r, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-3 p-3 rounded-xl"
-                      style={{
-                        background: r.correct ? "rgba(22,163,74,0.08)" : "rgba(220,38,38,0.06)",
-                        border: `1px solid ${r.correct ? "rgba(22,163,74,0.2)" : "rgba(220,38,38,0.15)"}`,
-                      }}
-                    >
-                      {r.correct ? (
-                        <CheckCircle2 size={16} style={{ color: "#16a34a" }} />
-                      ) : (
-                        <XCircle size={16} style={{ color: "#dc2626" }} />
-                      )}
-                      <span className="text-xs text-left flex-1" style={{ color: "var(--text-primary)" }}>
-                        {r.exercise.question.substring(0, 60)}...
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Save and update */}
-                {!activeCard.exercises.length && (
-                  <button
-                    onClick={handleQuizComplete}
-                    className="w-full max-w-xs mx-auto block py-3 rounded-xl text-sm font-semibold transition-all hover:scale-[1.01] active:scale-[0.99]"
-                    style={{
-                      background: "var(--color-primary-500)",
-                      color: "#fff",
-                    }}
-                  >
-                    Update Mastery
-                  </button>
-                )}
-                <button
-                  onClick={() => {
-                    handleQuizComplete();
-                    setView("list");
-                  }}
-                  className="w-full max-w-xs mx-auto mt-3 py-3 rounded-xl text-sm font-semibold transition-all hover:scale-[1.01] active:scale-[0.99]"
-                  style={{
-                    background: "var(--color-primary-500)",
-                    color: "#fff",
-                    boxShadow: "0 4px 12px rgba(26,58,110,0.2)",
-                  }}
-                >
-                  Update Mastery & Back to Cards
-                </button>
-              </div>
-            ) : (
-              /* Active exercise */
-              <div>
-                {/* Progress */}
-                <div className="flex items-center gap-2 mb-4">
-                  <div
-                    className="flex-1 h-2 rounded-full overflow-hidden"
-                    style={{ background: "var(--surface-elevated)" }}
-                  >
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${((currentExerciseIdx + 1) / activeCard.exercises.length) * 100}%`,
-                        background: "var(--color-primary-500)",
-                      }}
-                    />
-                  </div>
-                  <span
-                    className="text-xs font-medium"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    {currentExerciseIdx + 1}/{activeCard.exercises.length}
-                  </span>
-                </div>
-
-                {/* Exercise */}
-                {activeCard.exercises[currentExerciseIdx] && (() => {
-                  const exercise = activeCard.exercises[currentExerciseIdx];
-                  return (
-                    <div>
-                      <div
-                        className="rounded-2xl p-5 mb-4"
-                        style={{
-                          background: "var(--surface-card)",
-                          border: "1px solid var(--border)",
-                          boxShadow: "var(--shadow-sm)",
-                        }}
-                      >
-                        <p
-                          className="text-xs font-semibold uppercase tracking-wider mb-2"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          {exercise.type === "fill_blank" && "Fill in the blank"}
-                          {exercise.type === "word_scramble" && "Word scramble"}
-                          {exercise.type === "meaning_match" && "Match the meaning"}
-                        </p>
-                        <p
-                          className="font-heading text-base font-semibold leading-relaxed"
-                          style={{ color: "var(--text-primary)" }}
-                        >
-                          {exercise.question}
-                        </p>
-                      </div>
-
-                      {/* Answer input */}
-                      {exercise.type === "meaning_match" && exercise.options ? (
-                        <div className="space-y-2">
-                          {exercise.options.map((opt, i) => (
-                            <button
-                              key={i}
-                              onClick={() => setSelectedOption(i)}
-                              className="w-full text-left p-4 rounded-xl transition-all duration-200 hover:scale-[1.01] active:scale-[0.99]"
-                              style={{
-                                background: selectedOption === i
-                                  ? "var(--color-primary-50)"
-                                  : "var(--surface-elevated)",
-                                border: `1px solid ${
-                                  selectedOption === i
-                                    ? "var(--color-primary-500)"
-                                    : "var(--border)"
-                                }`,
-                                color: "var(--text-primary)",
-                              }}
-                            >
-                              <span
-                                className="text-sm"
-                                style={{ color: selectedOption === i ? "var(--color-primary-600)" : "var(--text-primary)" }}
-                              >
-                                {opt}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <input
-                          type="text"
-                          value={quizAnswer}
-                          onChange={(e) => setQuizAnswer(e.target.value)}
-                          placeholder="Type your answer..."
-                          className="w-full px-4 py-3 rounded-xl text-sm outline-none mb-4"
-                          style={{
-                            background: "var(--input-bg)",
-                            border: "1px solid var(--input-border)",
-                            color: "var(--text-primary)",
-                          }}
-                          onFocus={(e) => (e.currentTarget.style.borderColor = "var(--color-primary-500)")}
-                          onBlur={(e) => (e.currentTarget.style.borderColor = "var(--input-border)")}
-                          autoFocus
-                        />
-                      )}
-
-                      <button
-                        onClick={handleSubmitAnswer}
-                        disabled={exercise.type !== "meaning_match" && !quizAnswer.trim()}
-                        className="w-full py-3 rounded-xl text-sm font-semibold transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
-                        style={{
-                          background: "var(--color-primary-500)",
-                          color: "#fff",
-                        }}
-                      >
-                        Submit
-                      </button>
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ======= LIST VIEW ======= */}
-        {view === "list" && (
-          loading || isLoadingQuiz ? (
-            <div className="flex items-center justify-center py-12">
+        <div className="flex-1 px-4 py-5 overflow-y-auto">
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
               <Loader2 size={24} className="animate-spin" style={{ color: "var(--color-primary-500)" }} />
             </div>
           ) : cards.length === 0 ? (
-            <EmptyState />
+            /* Empty state */
+            <div className="flex flex-col items-center justify-center text-center py-16">
+              <div
+                className="w-20 h-20 rounded-3xl flex items-center justify-center mb-5"
+                style={{ background: "rgba(26,58,110,0.07)" }}
+              >
+                <Brain size={36} style={{ color: "var(--color-primary-400)" }} />
+              </div>
+              <h2 className="font-heading text-xl font-bold mb-2" style={{ color: "var(--text-primary)" }}>
+                Start memorizing Scripture
+              </h2>
+              <p className="text-sm max-w-xs leading-relaxed mb-6" style={{ color: "var(--text-secondary)" }}>
+                Add a verse you want to remember. We'll quiz you at the perfect intervals so it sticks.
+              </p>
+              <button
+                onClick={() => setShowPicker(true)}
+                className="flex items-center gap-2 px-6 py-3.5 rounded-2xl font-semibold"
+                style={{
+                  background: "linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))",
+                  color: "#fff",
+                }}
+              >
+                <Plus size={16} />
+                Add Your First Verse
+              </button>
+            </div>
           ) : (
             <>
-              {/* Due today */}
+              {/* Due-today call to action */}
               {dueCards.length > 0 && (
-                <section className="mb-6">
-                  <h2
-                    className="text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-2"
-                    style={{ color: "var(--color-accent-500)" }}
-                  >
-                    <Flame size={14} />
-                    Due Today ({dueCards.length})
-                  </h2>
-                  <div className="space-y-2">
-                    {dueCards.map((card) => (
-                      <CardRow
-                        key={card.id}
-                        card={card}
-                        onStartQuiz={() => handleStartQuiz(card)}
-                        onMastered={() => handleMastered(card.id)}
-                      />
-                    ))}
+                <div
+                  className="rounded-2xl p-5 mb-5 flex items-center justify-between"
+                  style={{
+                    background: "linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))",
+                    boxShadow: "var(--shadow-md)",
+                  }}
+                >
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Flame size={16} color="#fff" />
+                      <span className="text-sm font-bold text-white">
+                        {dueCards.length} verse{dueCards.length !== 1 ? "s" : ""} due today
+                      </span>
+                    </div>
+                    <p className="text-xs text-white/75">Keep your streak going!</p>
                   </div>
-                </section>
-              )}
-
-              {/* Learning */}
-              {learningCards.length > 0 && (
-                <section className="mb-6">
-                  <h2
-                    className="text-xs font-semibold uppercase tracking-wider mb-3"
-                    style={{ color: "var(--text-muted)" }}
+                  <button
+                    onClick={handleStartReview}
+                    className="px-5 py-2.5 rounded-xl text-sm font-bold transition-all hover:opacity-90 active:scale-[0.97]"
+                    style={{
+                      background: "rgba(255,255,255,0.2)",
+                      color: "#fff",
+                      border: "1.5px solid rgba(255,255,255,0.35)",
+                    }}
                   >
-                    In Progress ({learningCards.length})
-                  </h2>
-                  <div className="space-y-2">
-                    {learningCards.map((card) => (
-                      <CardRow
-                        key={card.id}
-                        card={card}
-                        onStartQuiz={() => handleStartQuiz(card)}
-                        onMastered={() => handleMastered(card.id)}
-                      />
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {/* Mastered */}
-              {masteredCards.length > 0 && (
-                <section className="mb-6">
-                  <h2
-                    className="text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-2"
-                    style={{ color: "var(--color-primary-500)" }}
-                  >
-                    <Trophy size={14} />
-                    Mastered ({masteredCards.length})
-                  </h2>
-                  <div className="space-y-2">
-                    {masteredCards.map((card) => (
-                      <CardRow
-                        key={card.id}
-                        card={card}
-                        onStartQuiz={() => handleStartQuiz(card)}
-                        onMastered={() => handleMastered(card.id)}
-                      />
-                    ))}
-                  </div>
-                </section>
+                    Review
+                  </button>
+                </div>
               )}
 
               {dueCards.length === 0 && (
-                <div className="text-center py-8">
-                  <CheckCircle2
-                    size={32}
-                    className="mx-auto mb-3"
-                    style={{ color: "var(--color-primary-300)" }}
-                  />
-                  <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                    All caught up! No verses due today.
-                  </p>
-                  <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                    Add new verses to keep growing.
-                  </p>
+                <div
+                  className="rounded-2xl p-4 mb-5 flex items-center gap-3"
+                  style={{ background: "rgba(22,163,74,0.06)", border: "1px solid rgba(22,163,74,0.15)" }}
+                >
+                  <CheckCircle2 size={20} style={{ color: "#16a34a" }} />
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: "#16a34a" }}>All caught up!</p>
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>No reviews due today.</p>
+                  </div>
                 </div>
               )}
-            </>
-          )
-        )}
 
-        {/* Loading overlay for verse picker + quiz gen */}
-        {isLoadingQuiz && (
-          <div className="text-center py-8">
-            <Loader2
-              size={24}
-              className="animate-spin mx-auto mb-3"
-              style={{ color: "var(--color-primary-500)" }}
-            />
-            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-              Generating exercises with AI...
-            </p>
-          </div>
-        )}
+              {/* Card list */}
+              <div className="space-y-2">
+                {cards.map((card) => {
+                  const due = card.next_review <= today();
+                  return (
+                    <div
+                      key={card.id}
+                      className="rounded-2xl p-4 flex items-center gap-3"
+                      style={{
+                        background: "var(--surface-card)",
+                        border: `1px solid ${due ? "rgba(201,162,39,0.3)" : "var(--border)"}`,
+                        borderLeft: `3px solid ${due ? "var(--color-accent-500)" : "transparent"}`,
+                      }}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-sm font-bold" style={{ color: "var(--color-primary-500)" }}>
+                            {card.verse_reference}
+                          </span>
+                          {due && (
+                            <span
+                              className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                              style={{ background: "rgba(201,162,39,0.12)", color: "var(--color-accent-600)" }}
+                            >
+                              Due
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>
+                          {card.verse_text || "Text not loaded"}
+                        </p>
+                        <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>
+                          Next review: {card.next_review} · Rep #{card.repetitions}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleDelete(card.id)}
+                        className="p-1.5 rounded-lg flex-shrink-0"
+                        style={{ color: "var(--text-muted)" }}
+                        aria-label="Remove"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Verse picker modal */}
       {showPicker && (
         <VersePicker
           onSelect={handleAddVerse}
-          onClose={() => {
-            setShowPicker(false);
-            setCustomRef("");
-          }}
-          customRef={customRef}
-          onCustomRefChange={setCustomRef}
+          onClose={() => !addingVerse && setShowPicker(false)}
+          loading={addingVerse}
         />
       )}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Card row                                                          */
-/* ------------------------------------------------------------------ */
-
-interface CardRowProps {
-  card: MemoryCard;
-  onStartQuiz: () => void;
-  onMastered: () => void;
-}
-
-function CardRow({ card, onStartQuiz, onMastered }: CardRowProps) {
-  const due = isDue(card);
-  const masteryPercent = card.mastery;
-
-  return (
-    <div
-      className="rounded-2xl p-4 flex items-center gap-3 transition-all duration-200 hover:scale-[1.01] active:scale-[0.99]"
-      style={{
-        background: "var(--surface-card)",
-        border: "1px solid var(--border)",
-        boxShadow: "var(--shadow-sm)",
-        borderLeft: due
-          ? "3px solid var(--color-accent-500)"
-          : "3px solid transparent",
-      }}
-    >
-      {/* Mastery ring */}
-      <div className="relative w-10 h-10 flex-shrink-0">
-        <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
-          <circle
-            cx="18" cy="18" r="15"
-            fill="none"
-            stroke="var(--border)"
-            strokeWidth="3"
-          />
-          <circle
-            cx="18" cy="18" r="15"
-            fill="none"
-            stroke={
-              masteryPercent >= 80
-                ? "var(--color-accent-500)"
-                : "var(--color-primary-500)"
-            }
-            strokeWidth="3"
-            strokeDasharray={`${masteryPercent * 0.94} 94`}
-            strokeLinecap="round"
-          />
-        </svg>
-        <span
-          className="absolute inset-0 flex items-center justify-center text-[10px] font-bold"
-          style={{ color: "var(--text-primary)" }}
-        >
-          {masteryPercent}%
-        </span>
-      </div>
-
-      {/* Verse info */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span
-            className="text-sm font-bold"
-            style={{ color: "var(--color-primary-500)" }}
-          >
-            {card.verse_reference}
-          </span>
-          {due && (
-            <span
-              className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-              style={{
-                background: "rgba(201,162,39,0.12)",
-                color: "var(--color-accent-600)",
-              }}
-            >
-              Due
-            </span>
-          )}
-        </div>
-        <p
-          className="text-xs truncate mt-0.5"
-          style={{ color: "var(--text-muted)" }}
-        >
-          {card.verse_text}
-        </p>
-        <div className="flex items-center gap-2 mt-1">
-          <div
-            className="flex-1 h-1 rounded-full overflow-hidden"
-            style={{ background: "var(--surface-elevated)" }}
-          >
-            <div
-              className="h-full rounded-full"
-              style={{
-                width: `${masteryPercent}%`,
-                background:
-                  masteryPercent >= 80
-                    ? "var(--color-accent-500)"
-                    : "var(--color-primary-500)",
-                transition: "width 0.5s ease",
-              }}
-            />
-          </div>
-          <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-            Next: {card.next_review}
-          </span>
-        </div>
-      </div>
-
-      {/* Actions */}
-      <div className="flex gap-1 flex-shrink-0">
-        {card.exercises.length > 0 && (
-          <button
-            onClick={onStartQuiz}
-            className="p-2 rounded-lg transition-colors hover:opacity-70"
-            style={{ color: "var(--color-primary-500)" }}
-            aria-label="Start quiz"
-          >
-            <Brain size={16} />
-          </button>
-        )}
-        {masteryPercent >= 80 && (
-          <button
-            onClick={onMastered}
-            className="p-2 rounded-lg transition-colors hover:opacity-70"
-            style={{ color: "var(--color-accent-500)" }}
-            aria-label="Mark as mastered"
-          >
-            <Trophy size={16} />
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Empty state                                                       */
-/* ------------------------------------------------------------------ */
-
-function EmptyState() {
-  return (
-    <div className="text-center py-16">
-      <div
-        className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center"
-        style={{ background: "rgba(26,58,110,0.07)" }}
-      >
-        <Brain size={28} style={{ color: "var(--color-primary-300)" }} />
-      </div>
-      <h3
-        className="font-heading text-base font-bold mb-1"
-        style={{ color: "var(--text-primary)" }}
-      >
-        No verses yet
-      </h3>
-      <p className="text-sm mb-6" style={{ color: "var(--text-muted)" }}>
-        Add your first verse to start memorizing with spaced repetition.
-      </p>
-    </div>
+    </>
   );
 }
