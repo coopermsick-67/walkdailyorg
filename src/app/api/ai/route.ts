@@ -16,7 +16,10 @@ export const runtime = "edge";
 const DAILY_LIMIT = 100;
 const MAX_BODY_BYTES = 64_000;
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? "";
+const OPENROUTER_API_KEY =
+  process.env.OPENROUTER_API_KEY ??
+  process.env.NEXT_PUBLIC_OPENROUTER_API_KEY ??
+  "";
 
 const SYSTEM_PROMPTS: Record<string, string> = {
   chat: `You are a faithful, warm, and knowledgeable Christian AI assistant for the Walk Daily app.
