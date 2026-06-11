@@ -16,10 +16,7 @@ export const runtime = "edge";
 const DAILY_LIMIT = 100;
 const MAX_BODY_BYTES = 64_000;
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const OPENROUTER_API_KEY =
-  process.env.OPENROUTER_API_KEY ??
-  process.env.NEXT_PUBLIC_OPENROUTER_API_KEY ??
-  "";
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? "";
 
 const SYSTEM_PROMPTS: Record<string, string> = {
   chat: `You are a faithful, warm, and knowledgeable Christian AI assistant for the Walk Daily app.
@@ -392,13 +389,11 @@ export async function POST(request: NextRequest) {
     }
     const messages = buildMessages(action, body, clientMessages, dynamicPrompt);
 
-    // Select model chain: primary → fallback1 → fallback2
-    // Swapped from tencent/hy3-preview, nex-agi/nex-n2-pro:free, openrouter/owl-alpha
-    // which do not exist on OpenRouter — using verified working models instead.
-    const model = process.env.AI_MODEL_PRIMARY || "anthropic/claude-3.5-haiku";
+    const model = "tencent/hy3-preview";
     const fallbackModels: string[] = [
-      process.env.AI_MODEL_FALLBACK || "meta-llama/llama-3.1-8b-instruct:free",
-      process.env.AI_MODEL_FALLBACK2 || "mistralai/mistral-7b-instruct:free",
+      "inclusionai/ling-2.6-flash",
+      "openrouter/owl-alpha",
+      "nex-agi/nex-n2-pro:free",
     ];
 
     // Stream response

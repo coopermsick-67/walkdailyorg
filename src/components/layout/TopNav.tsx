@@ -17,6 +17,7 @@ export function TopNav() {
     { href: "/chat", label: "Chat" },
     { href: "/prayer-wall", label: "Prayer" },
     { href: "/journal", label: "Journal" },
+    { href: "/memorize", label: "Memorize" },
   ];
 
   return (

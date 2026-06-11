@@ -8,43 +8,21 @@ import {
   Heart,
   PenLine,
   Calendar,
+  Brain,
 } from "lucide-react";
 
+// 7 tabs: Home, Bible, Plans, Chat(gold/center), Prayer, Journal, Memorize
 export function BottomNav() {
   const pathname = usePathname();
 
   const tabs = [
-    {
-      href: "/home",
-      label: "Home",
-      icon: Home,
-    },
-    {
-      href: "/bible",
-      label: "Bible",
-      icon: BookOpen,
-    },
-    {
-      href: "/bible/plans",
-      label: "Plans",
-      icon: Calendar,
-    },
-    {
-      href: "/chat",
-      label: "Chat",
-      icon: MessageCircle,
-      accent: true,
-    },
-    {
-      href: "/prayer-wall",
-      label: "Prayer",
-      icon: Heart,
-    },
-    {
-      href: "/journal",
-      label: "Journal",
-      icon: PenLine,
-    },
+    { href: "/home", label: "Home", icon: Home },
+    { href: "/bible", label: "Bible", icon: BookOpen },
+    { href: "/bible/plans", label: "Plans", icon: Calendar },
+    { href: "/chat", label: "Chat", icon: MessageCircle, accent: true },
+    { href: "/prayer-wall", label: "Prayer", icon: Heart },
+    { href: "/journal", label: "Journal", icon: PenLine },
+    { href: "/memorize", label: "Memorize", icon: Brain },
   ];
 
   return (
@@ -59,7 +37,7 @@ export function BottomNav() {
       aria-label="Main navigation"
     >
       <div
-        className="flex items-stretch justify-around max-w-lg mx-auto px-2"
+        className="flex items-stretch justify-around max-w-lg mx-auto px-1"
         style={{ height: 64 }}
         role="tablist"
       >
@@ -80,7 +58,7 @@ export function BottomNav() {
               aria-selected={active}
               aria-label={tab.label}
               className="flex flex-col items-center justify-center flex-1 relative"
-              style={{ minHeight: 44, minWidth: 44 }}
+              style={{ minHeight: 44, minWidth: 40 }}
             >
               {active && (
                 <div
@@ -102,11 +80,11 @@ export function BottomNav() {
                       "linear-gradient(135deg, var(--color-accent-400), var(--color-accent-600))",
                   }}
                 >
-                  <Icon size={22} color="#1a1a2e" />
+                  <Icon size={20} color="#1a1a2e" />
                 </div>
               ) : (
                 <Icon
-                  size={22}
+                  size={20}
                   color={
                     active
                       ? "var(--color-accent-500)"
@@ -116,7 +94,7 @@ export function BottomNav() {
                 />
               )}
               <span
-                className="text-[11px] mt-1"
+                className="text-[10px] mt-0.5"
                 style={{
                   color: active
                     ? "var(--color-accent-500)"

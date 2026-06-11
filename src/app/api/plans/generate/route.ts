@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-const OPENROUTER_API_KEY =
-  process.env.OPENROUTER_API_KEY ??
-  process.env.NEXT_PUBLIC_OPENROUTER_API_KEY ??
-  "";
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? "";
+
+const MODEL_CHAIN = [
+  "tencent/hy3-preview",
+  "inclusionai/ling-2.6-flash",
+  "openrouter/owl-alpha",
+  "nex-agi/nex-n2-pro:free",
+];
 
 interface PlanDay {
   day_number: number;
@@ -98,36 +102,50 @@ Rules:
 - Build thematically so each day connects to the next`;
 
   let planJson: GeneratedPlan;
-  try {
-    const aiRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://walkdaily.org",
-        "X-Title": "Walk Daily",
-      },
-      body: JSON.stringify({
-        model: "anthropic/claude-haiku-4-5",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.7,
-        max_tokens: Math.min(16000, Math.max(1200, duration * 120)),
-      }),
-    });
+  let lastAiError: string | null = null;
+  let rawContent = "";
 
-    if (!aiRes.ok) {
-      const txt = await aiRes.text();
-      console.error("AI error:", aiRes.status, txt);
-      return NextResponse.json({ error: "AI generation failed" }, { status: 502 });
+  for (const modelId of MODEL_CHAIN) {
+    try {
+      const aiRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://walkdaily.org",
+          "X-Title": "Walk Daily",
+        },
+        body: JSON.stringify({
+          model: modelId,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          temperature: 0.7,
+          max_tokens: Math.min(16000, Math.max(1200, duration * 120)),
+        }),
+      });
+
+      if (!aiRes.ok) {
+        lastAiError = `${modelId}: ${aiRes.status}`;
+        console.error("AI error:", modelId, aiRes.status);
+        continue;
+      }
+
+      const aiData = await aiRes.json();
+      rawContent = aiData.choices?.[0]?.message?.content ?? "";
+      if (rawContent) break;
+    } catch (err) {
+      lastAiError = `${modelId}: ${err instanceof Error ? err.message : "unknown"}`;
+      console.error("AI fetch error:", modelId, err);
     }
+  }
 
-    const aiData = await aiRes.json();
-    const rawContent: string = aiData.choices?.[0]?.message?.content ?? "";
+  if (!rawContent) {
+    return NextResponse.json({ error: `AI generation failed (tried all models): ${lastAiError}` }, { status: 502 });
+  }
 
-    // Strip markdown code fences if present
+  try {
     const cleaned = rawContent.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
     planJson = JSON.parse(cleaned);
   } catch (err) {
