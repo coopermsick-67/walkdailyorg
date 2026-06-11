@@ -140,7 +140,7 @@ export default function PrayerWallPage() {
 
   const [prayers, setPrayers] = useState<PrayerRequest[]>([]);
   const [answeredPrayers, setAnsweredPrayers] = useState<PrayerRequest[]>([]);
-  const [showAnswered, setShowAnswered] = useState(false);
+  const [activeTab, setActiveTab] = useState<"active" | "answered">("active");
   const [answeredLoading, setAnsweredLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -533,6 +533,26 @@ export default function PrayerWallPage() {
     }
   };
 
+  const handleMarkAnswered = async (prayerId: string) => {
+    try {
+      const client = createClient();
+      const { error } = await client
+        .from("prayer_requests")
+        .update({ is_answered: true, answered_at: new Date().toISOString() })
+        .eq("id", prayerId);
+      if (error) throw error;
+      setPrayers((prev) => prev.filter((p) => p.id !== prayerId));
+      setAnsweredPrayers((prev) => {
+        const prayer = prayers.find((p) => p.id === prayerId);
+        if (!prayer) return prev;
+        return [{ ...prayer, is_answered: true }, ...prev];
+      });
+      success("Praise God! Marked as answered 🙌");
+    } catch (err: unknown) {
+      toastError(err instanceof Error ? err.message : "Failed to mark as answered");
+    }
+  };
+
   const handleDelete = async () => {
     const prayerId = deleteConfirmId;
     if (!prayerId) return;
@@ -611,6 +631,28 @@ export default function PrayerWallPage() {
             Lift each other up in prayer
           </p>
         </div>
+      </div>
+
+      {/* Filter tabs */}
+      <div className="flex gap-2 mb-4">
+        {(["active", "answered"] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => {
+              setActiveTab(tab);
+              if (tab === "answered" && answeredPrayers.length === 0) fetchAnsweredPrayers();
+            }}
+            className="flex-1 py-2 rounded-xl text-sm font-semibold transition-all"
+            style={{
+              background: activeTab === tab ? "var(--color-accent-500)" : "var(--surface-card)",
+              color: activeTab === tab ? "#fff" : "var(--text-secondary)",
+              border: activeTab === tab ? "none" : "1px solid var(--border)",
+              minHeight: 40,
+            }}
+          >
+            {tab === "active" ? "🙏 Active" : "✅ Answered"}
+          </button>
+        ))}
       </div>
 
       {/* Prayer streak celebration overlay */}
@@ -735,54 +777,102 @@ export default function PrayerWallPage() {
       </div>
 
       {/* Prayer list */}
-      {prayerList.length === 0 && !loading ? (
-        <EmptyState
-          title="No prayer requests yet"
-          description="Be the first to share a prayer request and let the community support you."
-          illustration="prayer"
-          action={
-            <button
-              onClick={() => setShowModal(true)}
-              className="btn-primary mt-2"
-            >
-              Post a Prayer Request
-            </button>
-          }
-        />
+      {activeTab === "active" ? (
+        prayerList.length === 0 && !loading ? (
+          <EmptyState
+            title="No prayer requests yet"
+            description="Be the first to share a prayer request and let the community support you."
+            illustration="prayer"
+            action={
+              <button
+                onClick={() => setShowModal(true)}
+                className="btn-primary mt-2"
+              >
+                Post a Prayer Request
+              </button>
+            }
+          />
+        ) : (
+          <div className="space-y-3" ref={listRef}>
+            {prayerList
+              .filter((p) => sensitiveContentWarning || !isSensitiveContent(p.title + " " + p.body))
+              .slice(0, visibleCount)
+              .map((prayer) => (
+              <PrayerCard
+                key={prayer.id}
+                prayer={prayer}
+                hasPrayed={prayedTimestampsRef.current.has(prayer.id)}
+                isPraying={pendingSetRef.current.has(prayer.id)}
+                prayAnimKey={prayAnimKey[prayer.id] || 0}
+                isTimerActive={timerPrayerId === prayer.id}
+                timerCount={timerPrayerId === prayer.id ? timerCount : 0}
+                onPray={handlePrayWithTimer}
+                onFlag={handleFlag}
+                onMarkAnswered={handleMarkAnswered}
+                onDelete={(id) => setDeleteConfirmId(id)}
+                currentUserId={currentUserId}
+                showSensitive={sensitiveContentWarning}
+              />
+            ))}
+            {prayerList.length > visibleCount && (
+              <button
+                onClick={() => setVisibleCount((prev) => prev + 20)}
+                className="w-full py-3 rounded-2xl text-sm font-semibold transition-colors hover:opacity-80"
+                style={{
+                  background: "var(--surface-card)",
+                  border: "1px dashed var(--border)",
+                  color: "var(--color-primary-500)",
+                  minHeight: 44,
+                }}
+              >
+                Load more ({prayerList.length - visibleCount} remaining)
+              </button>
+            )}
+          </div>
+        )
       ) : (
-        <div className="space-y-3" ref={listRef}>
-          {prayerList
-            .filter((p) => sensitiveContentWarning || !isSensitiveContent(p.title + " " + p.body))
-            .slice(0, visibleCount)
-            .map((prayer) => (
-            <PrayerCard
-              key={prayer.id}
-              prayer={prayer}
-              hasPrayed={prayedTimestampsRef.current.has(prayer.id)}
-              isPraying={pendingSetRef.current.has(prayer.id)}
-              prayAnimKey={prayAnimKey[prayer.id] || 0}
-              isTimerActive={timerPrayerId === prayer.id}
-              timerCount={timerPrayerId === prayer.id ? timerCount : 0}
-              onPray={handlePrayWithTimer}
-              onFlag={handleFlag}
-              onDelete={(id) => setDeleteConfirmId(id)}
-              currentUserId={currentUserId}
-              showSensitive={sensitiveContentWarning}
-            />
-          ))}
-          {prayerList.length > visibleCount && (
-            <button
-              onClick={() => setVisibleCount((prev) => prev + 20)}
-              className="w-full py-3 rounded-2xl text-sm font-semibold transition-colors hover:opacity-80"
-              style={{
-                background: "var(--surface-card)",
-                border: "1px dashed var(--border)",
-                color: "var(--color-primary-500)",
-                minHeight: 44,
-              }}
+        /* Answered tab */
+        <div className="space-y-3">
+          {answeredLoading ? (
+            <div className="py-6 text-center text-sm" style={{ color: "var(--text-muted)" }}>
+              Loading answered prayers...
+            </div>
+          ) : answeredPrayers.length === 0 ? (
+            <div
+              className="rounded-2xl p-6 text-center"
+              style={{ background: "var(--surface-card)", border: "1px dashed var(--border)" }}
             >
-              Load more ({prayerList.length - visibleCount} remaining)
-            </button>
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                No answered prayers yet. Keep praying — God is faithful!
+              </p>
+            </div>
+          ) : (
+            answeredPrayers.map((prayer) => (
+              <div
+                key={prayer.id}
+                className="rounded-2xl p-4 relative overflow-hidden"
+                style={{
+                  background: "linear-gradient(135deg, rgba(201,162,39,0.08), rgba(26,58,110,0.05))",
+                  border: "1px solid rgba(201, 162, 39, 0.2)",
+                }}
+              >
+                <div
+                  className="absolute top-3 right-3 flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold"
+                  style={{ background: "rgba(201, 162, 39, 0.15)", color: "var(--color-accent-500)" }}
+                >
+                  <span>✨</span> Answered
+                </div>
+                <h4 className="font-semibold text-sm font-heading pr-20" style={{ color: "var(--text-primary)" }}>
+                  {prayer.title}
+                </h4>
+                <p className="text-xs mt-1 line-clamp-2" style={{ color: "var(--text-secondary)" }}>
+                  {prayer.body.length > 100 ? prayer.body.slice(0, 100) + "..." : prayer.body}
+                </p>
+                <p className="text-xs mt-2 font-medium" style={{ color: "var(--color-accent-500)" }}>
+                  {prayer.is_anonymous ? "Anonymous" : prayer.profiles?.[0]?.display_name || "ABrother"} • {timeAgo(prayer.created_at)}
+                </p>
+              </div>
+            ))
           )}
         </div>
       )}
@@ -800,103 +890,6 @@ export default function PrayerWallPage() {
         </div>
       )}
 
-      {/* Answered Prayers Section (Issue 37) */}
-      <div className="mt-8 mb-6">
-        <button
-          onClick={() => {
-            setShowAnswered(!showAnswered);
-            if (!showAnswered && answeredPrayers.length === 0) {
-              fetchAnsweredPrayers();
-            }
-          }}
-          className="flex items-center gap-2 w-full py-3 px-4 rounded-2xl text-sm font-semibold transition-colors"
-          style={{
-            background: "rgba(201, 162, 39, 0.08)",
-            border: "1px solid rgba(201, 162, 39, 0.2)",
-            color: "var(--color-accent-500)",
-            minHeight: 44,
-          }}
-        >
-          <span>🎉</span>
-          {showAnswered ? "Hide" : "Show"} Answered Prayers
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{
-              marginLeft: "auto",
-              transform: showAnswered ? "rotate(180deg)" : "rotate(0deg)",
-              transition: "transform 0.2s ease",
-            }}
-          >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </button>
-
-        {showAnswered && (
-          <div className="mt-4 space-y-3">
-            {answeredLoading ? (
-              <div className="py-6 text-center text-sm" style={{ color: "var(--text-muted)" }}>
-                Loading answered prayers...
-              </div>
-            ) : answeredPrayers.length === 0 ? (
-              <div
-                className="rounded-2xl p-6 text-center"
-                style={{ background: "var(--surface-card)", border: "1px dashed var(--border)" }}
-              >
-                <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                  No answered prayers yet. Keep praying - God is faithful!
-                </p>
-              </div>
-            ) : (
-              answeredPrayers.map((prayer) => (
-                <div
-                  key={prayer.id}
-                  className="rounded-2xl p-4 relative overflow-hidden"
-                  style={{
-                    background: "linear-gradient(135deg, rgba(201,162,39,0.08), rgba(26,58,110,0.05))",
-                    border: "1px solid rgba(201, 162, 39, 0.2)",
-                  }}
-                >
-                  {/* Celebration badge */}
-                  <div
-                    className="absolute top-3 right-3 flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold"
-                    style={{
-                      background: "rgba(201, 162, 39, 0.15)",
-                      color: "var(--color-accent-500)",
-                    }}
-                  >
-                    <span>✨</span> Answered
-                  </div>
-                  <h4
-                    className="font-semibold text-sm font-heading pr-20"
-                    style={{ color: "var(--text-primary)" }}
-                  >
-                    {prayer.title}
-                  </h4>
-                  <p
-                    className="text-xs mt-1 line-clamp-2"
-                    style={{ color: "var(--text-secondary)" }}
-                  >
-                    {prayer.body.length > 100 ? prayer.body.slice(0, 100) + "..." : prayer.body}
-                  </p>
-                  <p
-                    className="text-xs mt-2 font-medium"
-                    style={{ color: "var(--color-accent-500)" }}
-                  >
-                    {prayer.is_anonymous ? "Anonymous" : prayer.profiles?.[0]?.display_name || "ABrother"} • {timeAgo(prayer.created_at)}
-                  </p>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-      </div>
 
       {/* FAB */}
       <button
@@ -1176,6 +1169,7 @@ function PrayerCard({
   timerCount,
   onPray,
   onFlag,
+  onMarkAnswered,
   onDelete,
   currentUserId,
   showSensitive,
@@ -1188,6 +1182,7 @@ function PrayerCard({
   timerCount: number;
   onPray: (id: string) => void;
   onFlag: (id: string) => void;
+  onMarkAnswered: (id: string) => void;
   onDelete: (id: string) => void;
   currentUserId: string | null;
   showSensitive: boolean;
@@ -1277,13 +1272,22 @@ function PrayerCard({
                 setShowMenu(false);
               }}
               className="w-full text-left px-4 py-2.5 text-sm rounded-lg hover:opacity-80"
-              style={{
-                color: "var(--text-secondary)",
-                minHeight: 44,
-              }}
+              style={{ color: "var(--text-secondary)", minHeight: 44 }}
             >
               Flag as inappropriate
             </button>
+            {isOwner && !prayer.is_answered && (
+              <button
+                onClick={() => {
+                  onMarkAnswered(prayer.id);
+                  setShowMenu(false);
+                }}
+                className="w-full text-left px-4 py-2.5 text-sm rounded-lg hover:opacity-80"
+                style={{ color: "var(--color-accent-500)", minHeight: 44 }}
+              >
+                ✅ Mark as Answered
+              </button>
+            )}
             {isOwner && (
               <button
                 onClick={() => {
@@ -1291,14 +1295,21 @@ function PrayerCard({
                   setShowMenu(false);
                 }}
                 className="w-full text-left px-4 py-2.5 text-sm rounded-lg"
-                style={{
-                  color: "var(--error-bg)",
-                  minHeight: 44,
-                }}
+                style={{ color: "var(--error-bg)", minHeight: 44 }}
               >
                 Delete prayer request
               </button>
             )}
+          </div>
+        )}
+
+        {/* Answered badge */}
+        {prayer.is_answered && (
+          <div
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold mb-2"
+            style={{ background: "rgba(201,162,39,0.12)", color: "var(--color-accent-500)" }}
+          >
+            ✓ Answered
           </div>
         )}
 

@@ -148,21 +148,27 @@ export default function DevotionalPage() {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [selectedPast, setSelectedPast] = useState<Devotional | null>(null);
 
-  // Load today's devotional from Supabase on mount
+  // Load today's devotional from shared daily_devotionals cache on mount
   useEffect(() => {
     async function loadToday() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setIsLoadingCached(false); return; }
-
       const today = todayString();
       const { data } = await supabase
-        .from("devotionals")
-        .select("id, date, scripture, reflection, prayer_prompt, action_step")
-        .eq("user_id", user.id)
+        .from("daily_devotionals")
+        .select("id, date, content, verse_reference")
         .eq("date", today)
         .maybeSingle();
 
-      if (data) setDevotional(data as Devotional);
+      if (data?.content) {
+        const parsed = parseDevotionalSections(data.content);
+        setDevotional({
+          id: data.id,
+          date: data.date,
+          scripture: parsed.scripture || data.verse_reference || "",
+          reflection: parsed.reflection || "",
+          prayer_prompt: parsed.prayer_prompt || "",
+          action_step: parsed.action_step || "",
+        } as Devotional);
+      }
       setIsLoadingCached(false);
     }
     loadToday();
@@ -172,15 +178,26 @@ export default function DevotionalPage() {
   const loadPastDevotionals = useCallback(async () => {
     setLoadingHistory(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
       const { data } = await supabase
-        .from("devotionals")
-        .select("id, date, scripture, reflection, prayer_prompt, action_step")
-        .eq("user_id", user.id)
+        .from("daily_devotionals")
+        .select("id, date, content, verse_reference")
         .order("date", { ascending: false })
         .limit(60);
-      if (data) setPastDevotionals(data as Devotional[]);
+      if (data) {
+        setPastDevotionals(
+          data.map((row: { id: string; date: string; content: string; verse_reference: string | null }) => {
+            const parsed = parseDevotionalSections(row.content);
+            return {
+              id: row.id,
+              date: row.date,
+              scripture: parsed.scripture || row.verse_reference || "",
+              reflection: parsed.reflection || "",
+              prayer_prompt: parsed.prayer_prompt || "",
+              action_step: parsed.action_step || "",
+            } as Devotional;
+          })
+        );
+      }
     } catch { /* silent */ }
     setLoadingHistory(false);
   }, [supabase]);
@@ -203,8 +220,9 @@ export default function DevotionalPage() {
         onDone: async (fullText) => {
           setIsStreaming(false);
           const parsed = parseDevotionalSections(fullText);
+          const today = todayString();
           const newDev: Devotional = {
-            date: todayString(),
+            date: today,
             scripture: parsed.scripture || "",
             reflection: parsed.reflection || "",
             prayer_prompt: parsed.prayer_prompt || "",
@@ -212,23 +230,15 @@ export default function DevotionalPage() {
           };
           setDevotional(newDev);
 
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-            const { data: existing } = await supabase
-              .from("devotionals")
-              .select("id")
-              .eq("user_id", user.id)
-              .eq("date", todayString())
-              .maybeSingle();
-
-            const payload = { ...newDev, user_id: user.id };
-            if (existing?.id) {
-              await supabase.from("devotionals").update(payload).eq("id", existing.id);
-            } else {
-              await supabase.from("devotionals").insert(payload);
-            }
-            success("Devotional saved");
-          }
+          // Cache in shared daily_devotionals — ON CONFLICT date DO NOTHING
+          // so the first generation wins and subsequent requests use the cache
+          await supabase
+            .from("daily_devotionals")
+            .upsert(
+              { date: today, content: fullText, verse_reference: parsed.scripture?.split("\n")[0] || null },
+              { onConflict: "date", ignoreDuplicates: true }
+            );
+          success("Devotional ready");
 
           setStreamingText("");
         },

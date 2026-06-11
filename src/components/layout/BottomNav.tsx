@@ -7,11 +7,12 @@ import {
   MessageCircle,
   Heart,
   PenLine,
+  Brain,
 } from "lucide-react";
 
 /**
  * Bottom navigation bar (mobile-first).
- * 5 tabs: Home, Bible, Chat, Prayer, Journal
+ * 6 tabs: Home, Bible, Chat, Prayer, Journal, Memorize
  */
 export function BottomNav() {
   const pathname = usePathname();
@@ -42,6 +43,11 @@ export function BottomNav() {
       href: "/journal",
       label: "Journal",
       icon: PenLine,
+    },
+    {
+      href: "/memorize",
+      label: "Memorize",
+      icon: Brain,
     },
   ];
 
