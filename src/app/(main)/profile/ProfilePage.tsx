@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import ThemePicker from "@/components/ui/ThemePicker";
+import { Bell, BellOff } from "lucide-react";
+
+const VAPID_PUBLIC = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
 
 const DENOMINATIONS = [
   "Non-denominational",
@@ -26,6 +29,8 @@ interface ProfileData {
   denomination: string;
   preferred_translation: string;
   streak_days: number;
+  push_notifications_enabled: boolean;
+  daily_reminder_hour: number | null;
 }
 
 export default function ProfilePage() {
@@ -40,6 +45,9 @@ export default function ProfilePage() {
   const [denomination, setDenomination] = useState("");
   const [preferredTranslation, setPreferredTranslation] = useState("NIV");
   const [streakDays, setStreakDays] = useState(0);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [reminderHour, setReminderHour] = useState(7);
+  const [togglingPush, setTogglingPush] = useState(false);
 
   // Stats
   const [versesRead, setVersesRead] = useState(0);
@@ -60,7 +68,7 @@ export default function ProfilePage() {
 
       const { data: profile } = await createClient()
         .from("profiles")
-        .select("display_name, denomination, preferred_translation, streak_days")
+        .select("display_name, denomination, preferred_translation, streak_days, push_notifications_enabled, daily_reminder_hour")
         .eq("id", user.id)
         .single();
 
@@ -69,6 +77,8 @@ export default function ProfilePage() {
         setDenomination(profile.denomination || "");
         setPreferredTranslation(profile.preferred_translation || "NIV");
         setStreakDays(profile.streak_days || 0);
+        setPushEnabled(profile.push_notifications_enabled ?? false);
+        setReminderHour(profile.daily_reminder_hour ?? 7);
       }
 
       // Count verses read (distinct chapters from reading_progress)
@@ -113,6 +123,67 @@ export default function ProfilePage() {
     } else {
       success("Profile saved successfully!");
     }
+  };
+
+  const handleTogglePush = async () => {
+    if (!userId) return;
+    setTogglingPush(true);
+    try {
+      if (pushEnabled) {
+        // Disable: remove all subscriptions
+        const client = createClient();
+        const { data: subs } = await client
+          .from("push_subscriptions")
+          .select("endpoint")
+          .eq("user_id", userId);
+        for (const sub of subs ?? []) {
+          await fetch("/api/push/subscribe", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ endpoint: (sub as { endpoint: string }).endpoint }),
+          });
+        }
+        setPushEnabled(false);
+        info("Daily reminders turned off.");
+      } else {
+        // Enable: request browser permission then subscribe
+        if (!("Notification" in window)) {
+          toastError("This browser doesn't support notifications.");
+          return;
+        }
+        const permission = await Notification.requestPermission();
+        if (permission !== "granted") {
+          toastError("Notification permission denied.");
+          return;
+        }
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: VAPID_PUBLIC,
+        });
+        const res = await fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subscription: sub }),
+        });
+        if (!res.ok) throw new Error("Subscribe failed");
+        setPushEnabled(true);
+        success("Daily reminders enabled!");
+      }
+    } catch (e) {
+      toastError(e instanceof Error ? e.message : "Could not update notifications");
+    } finally {
+      setTogglingPush(false);
+    }
+  };
+
+  const handleReminderHourChange = async (hour: number) => {
+    setReminderHour(hour);
+    if (!userId) return;
+    await createClient()
+      .from("profiles")
+      .update({ daily_reminder_hour: hour })
+      .eq("id", userId);
   };
 
   const handleSignOut = async () => {
@@ -444,6 +515,100 @@ export default function ProfilePage() {
           Appearance
         </h2>
         <ThemePicker />
+      </div>
+
+      {/* Notifications */}
+      <div
+        className="rounded-2xl p-6 mb-6"
+        style={{
+          background: "var(--surface-card)",
+          boxShadow: "var(--shadow-sm)",
+          border: "1px solid var(--border)",
+        }}
+      >
+        <h2
+          className="font-heading text-lg font-semibold mb-4"
+          style={{ color: "var(--text-primary)" }}
+        >
+          Daily Reminder
+        </h2>
+
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center"
+              style={{
+                background: pushEnabled ? "rgba(201,162,39,0.12)" : "var(--surface-elevated)",
+                color: pushEnabled ? "var(--color-accent-500)" : "var(--text-muted)",
+              }}
+            >
+              {pushEnabled ? <Bell size={18} /> : <BellOff size={18} />}
+            </div>
+            <div>
+              <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                Push Notifications
+              </p>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                {pushEnabled ? "You'll receive daily reminders" : "Get a nudge to read each day"}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleTogglePush}
+            disabled={togglingPush}
+            className="relative w-12 h-6 rounded-full transition-all disabled:opacity-50"
+            style={{
+              background: pushEnabled ? "var(--color-accent-500)" : "var(--border-strong)",
+            }}
+            role="switch"
+            aria-checked={pushEnabled}
+            aria-label="Toggle daily reminder"
+          >
+            <div
+              className="absolute top-1 w-4 h-4 rounded-full bg-white transition-all"
+              style={{ left: pushEnabled ? "calc(100% - 20px)" : 4 }}
+            />
+          </button>
+        </div>
+
+        {pushEnabled && (
+          <div>
+            <label
+              htmlFor="reminder-hour"
+              className="block text-sm font-medium mb-1.5"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              Reminder time
+            </label>
+            <select
+              id="reminder-hour"
+              value={reminderHour}
+              onChange={(e) => handleReminderHourChange(Number(e.target.value))}
+              className="w-full px-4 py-3 rounded-xl text-sm appearance-none"
+              style={{
+                background: "var(--input-bg)",
+                border: "1px solid var(--input-border)",
+                color: "var(--text-primary)",
+              }}
+            >
+              {Array.from({ length: 24 }, (_, h) => {
+                const label =
+                  h === 0
+                    ? "12:00 AM"
+                    : h < 12
+                    ? `${h}:00 AM`
+                    : h === 12
+                    ? "12:00 PM"
+                    : `${h - 12}:00 PM`;
+                return (
+                  <option key={h} value={h}>
+                    {label}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Sign Out */}

@@ -38,6 +38,12 @@ interface MemoryCard {
   verse_text: string;
 }
 
+interface TodayReading {
+  planTitle: string;
+  dayNumber: number;
+  reference: string;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
@@ -167,6 +173,7 @@ export default function HomePage() {
   const [loadingVerse, setLoadingVerse] = useState(true);
   const [loadingPrayers, setLoadingPrayers] = useState(true);
   const [loadingMemory, setLoadingMemory] = useState(true);
+  const [todayReading, setTodayReading] = useState<TodayReading | null>(null);
 
   // Easter egg state
   const [showEasterEgg, setShowEasterEgg] = useState(false);
@@ -391,6 +398,39 @@ export default function HomePage() {
     setLoadingMemory(false);
   }, []);
 
+  const loadTodayReading = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: plans } = await supabase
+        .from("reading_plans")
+        .select("id, title")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (!plans?.length) return;
+      const plan = plans[0];
+
+      const { data: day } = await supabase
+        .from("reading_plan_days")
+        .select("day_number, reference")
+        .eq("plan_id", plan.id)
+        .is("completed_at", null)
+        .order("day_number")
+        .limit(1)
+        .maybeSingle();
+
+      if (day) {
+        setTodayReading({ planTitle: plan.title, dayNumber: day.day_number, reference: day.reference });
+      }
+    } catch {
+      /* silent */
+    }
+  }, []);
+
   // Easter egg: tap logo 5 times quickly
   const handleLogoTap = useCallback(() => {
     logoTapCountRef.current += 1;
@@ -434,7 +474,8 @@ export default function HomePage() {
     loadDailyVerse();
     loadCommunityPrayers();
     loadMemoryCards();
-  }, [loadProfile, loadDailyVerse, loadCommunityPrayers, loadMemoryCards, incrementStreak]);
+    loadTodayReading();
+  }, [loadProfile, loadDailyVerse, loadCommunityPrayers, loadMemoryCards, incrementStreak, loadTodayReading]);
 
   const greeting = getGreeting();
   const displayName = profile?.display_name || "friend";
@@ -615,7 +656,50 @@ export default function HomePage() {
         )}
       </section>
 
-      {/* 3. Today's Devotional */}
+      {/* 3. Today's Reading Plan */}
+      {todayReading && (
+        <section className="mb-5">
+          <h2
+            className="text-xs font-semibold uppercase tracking-wider mb-2"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Reading Plan
+          </h2>
+          <Link
+            href="/bible/plans"
+            className="flex items-center gap-4 rounded-2xl p-4 transition-transform hover:scale-[1.01] active:scale-[0.99]"
+            style={{
+              background: "var(--surface-card)",
+              boxShadow: "var(--shadow-sm)",
+              border: "1px solid rgba(201,162,39,0.2)",
+            }}
+          >
+            <div
+              className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: "rgba(201,162,39,0.1)" }}
+            >
+              <BookOpen size={22} style={{ color: "var(--color-accent-500)" }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p
+                className="text-xs font-semibold truncate"
+                style={{ color: "var(--color-accent-500)" }}
+              >
+                {todayReading.planTitle}
+              </p>
+              <p
+                className="text-sm font-semibold font-heading mt-0.5"
+                style={{ color: "var(--text-primary)" }}
+              >
+                Day {todayReading.dayNumber} — {todayReading.reference}
+              </p>
+            </div>
+            <ChevronRight size={18} style={{ color: "var(--text-muted)" }} />
+          </Link>
+        </section>
+      )}
+
+      {/* 5. Today's Devotional */}
       <section className="mb-5">
         <h2
           className="text-xs font-semibold uppercase tracking-wider mb-2"

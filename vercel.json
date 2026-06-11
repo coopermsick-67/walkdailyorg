@@ -4,6 +4,12 @@
   "buildCommand": "next build",
   "installCommand": "npm install",
   "regions": ["iad1"],
+  "crons": [
+    {
+      "path": "/api/cron/daily-reminders",
+      "schedule": "0 * * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/manifest.json",
