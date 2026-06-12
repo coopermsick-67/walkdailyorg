@@ -33,6 +33,12 @@ export default function Step19EnterApp({ name, verse }: Step19EnterAppProps) {
       await supabase
         .from("profiles")
         .upsert({ id: user.id, has_completed_onboarding: true });
+      // Fire-and-forget: pre-generate a 30-day personalized reading plan
+      fetch("/api/plans/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ duration: 30, theme: "Surprise me" }),
+      }).catch(() => {/* non-critical */});
     }
     router.push("/home");
   };
