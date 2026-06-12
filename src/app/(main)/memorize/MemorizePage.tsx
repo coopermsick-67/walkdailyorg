@@ -261,7 +261,7 @@ function ReviewCard({
 
         <h2
           className="font-heading text-2xl font-bold mb-3"
-          style={{ color: "var(--color-primary-500)" }}
+          style={{ color: "var(--text-primary)" }}
         >
           {card.verse_reference}
         </h2>
@@ -658,7 +658,7 @@ export default function MemorizePage() {
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <span className="text-sm font-bold" style={{ color: "var(--color-primary-500)" }}>
+                          <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
                             {card.verse_reference}
                           </span>
                           {due && (

@@ -613,7 +613,7 @@ export default function ChatPage() {
       {showHistoryPanel && (
         <div
           className="absolute inset-0 z-40 flex flex-col"
-          style={{ background: "var(--surface-bg)" }}
+          style={{ background: "var(--bg)" }}
         >
           <div
             className="sticky top-0 px-4 py-3 flex items-center gap-3"
