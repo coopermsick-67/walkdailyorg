@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAuthenticatedClient } from "@/lib/supabase/server";
 import { buildSystemPrompt } from "@/lib/system-prompt";
+import { getUserAIContext } from "@/lib/ai-context";
 import type { AIRequest, AIStreamPayload } from "@/types/ai";
 
 /* ------------------------------------------------------------------ */
@@ -371,20 +372,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build messages — use personalized system prompt for chat actions
+    // Build personalized system prompt — profile for chat, user context for all actions
     let dynamicPrompt: string | undefined;
     if (action === "chat") {
       try {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("display_name, faith_journey_stage, denomination, preferred_translation, spiritual_challenges, connection_styles, reading_frequency, reading_time_of_day, bible_reading_history, prayer_style, learning_style, life_stage, interests, accountability_preference, content_depth, age_range")
-          .eq("id", user.id)
-          .single();
-        if (profile) {
-          dynamicPrompt = buildSystemPrompt(profile as any);
-        }
+        const [profileResult, contextStr] = await Promise.all([
+          supabase
+            .from("profiles")
+            .select("display_name, faith_journey_stage, denomination, preferred_translation, spiritual_challenges, connection_styles, reading_frequency, reading_time_of_day, bible_reading_history, prayer_style, learning_style, life_stage, interests, accountability_preference, content_depth, age_range")
+            .eq("id", user.id)
+            .single(),
+          getUserAIContext(user.id, supabase),
+        ]);
+        const basePrompt = profileResult.data
+          ? buildSystemPrompt(profileResult.data as any)
+          : SYSTEM_PROMPTS.chat;
+        dynamicPrompt = contextStr ? `${basePrompt}${contextStr}` : basePrompt;
       } catch {
         // Fall back to default prompt
+      }
+    } else {
+      try {
+        const contextStr = await getUserAIContext(user.id, supabase);
+        if (contextStr) {
+          dynamicPrompt = `${SYSTEM_PROMPTS[action] ?? SYSTEM_PROMPTS.chat}${contextStr}`;
+        }
+      } catch {
+        // Non-critical — use static prompt
       }
     }
     const messages = buildMessages(action, body, clientMessages, dynamicPrompt);

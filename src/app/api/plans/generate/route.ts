@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getUserAIContext } from "@/lib/ai-context";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? "";
 
@@ -46,14 +47,17 @@ export async function POST(request: Request) {
     .trim()
     .slice(0, 80);
 
-  // Fetch profile for personalization
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select(
-      "display_name, faith_journey_stage, spiritual_challenges, bible_reading_history, reading_frequency, denomination, preferred_translation",
-    )
-    .eq("id", user.id)
-    .single();
+  // Fetch profile + user context in parallel
+  const [{ data: profile }, userContext] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select(
+        "display_name, faith_journey_stage, spiritual_challenges, bible_reading_history, reading_frequency, denomination, preferred_translation",
+      )
+      .eq("id", user.id)
+      .single(),
+    getUserAIContext(user.id, supabase).catch(() => ""),
+  ]);
 
   const firstName = (profile?.display_name as string | null)?.split(" ")[0] || "friend";
   const faithStage = (profile?.faith_journey_stage as string | null) || "growing";
@@ -109,7 +113,7 @@ Rules:
 - Day references should be specific (e.g. "Romans 8:1-17", not "Romans 8")
 - content_snippet: max 80 characters, practical and encouraging
 - Vary between Old and New Testament if duration >= 30 days
-- Build thematically so each day connects to the next`;
+- Build thematically so each day connects to the next${userContext ? `\n\n${userContext}` : ""}`;
 
   let planJson: GeneratedPlan;
   let lastAiError: string | null = null;
