@@ -37,7 +37,12 @@ interface DBDay {
   plan_id: string;
   day_number: number;
   reference: string;
+  title_summary: string | null;
   content_snippet: string | null;
+  verse_text: string | null;
+  reflection: string | null;
+  prayer_prompt: string | null;
+  application: string | null;
   completed_at: string | null;
 }
 
@@ -314,11 +319,15 @@ function PlanCard({ plan, onSelect, onDelete }: { plan: DBPlan; onSelect: () => 
 /*  Plan detail view                                                   */
 /* ------------------------------------------------------------------ */
 
-function PlanDetail({ plan, onBack, onDayToggle }: {
+function PlanDetail({ plan, onBack, onDayToggle, onReload }: {
   plan: DBPlan;
   onBack: () => void;
   onDayToggle: (dayId: string, currentlyCompleted: boolean) => void;
+  onReload: () => Promise<void>;
 }) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [enriching, setEnriching] = useState(false);
+  const needsEnrich = plan.days.some((d) => !d.reflection && !d.verse_text);
   const completedCount = plan.days.filter((d) => d.completed_at).length;
   const pct = plan.total_days > 0 ? Math.round((completedCount / plan.total_days) * 100) : 0;
 
@@ -366,6 +375,45 @@ function PlanDetail({ plan, onBack, onDayToggle }: {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-5">
+        {/* Enrich banner for older plans */}
+        {needsEnrich && (
+          <div
+            className="mb-4 rounded-xl p-4 flex items-center gap-3"
+            style={{
+              background: "rgba(201,162,39,0.08)",
+              border: "1px solid rgba(201,162,39,0.2)",
+            }}
+          >
+            <Sparkles size={16} style={{ color: "var(--color-accent-500)", flexShrink: 0 }} />
+            <p className="text-xs flex-1" style={{ color: "var(--text-secondary)" }}>
+              Add verse text, reflections, and prayers to each day.
+            </p>
+            <button
+              disabled={enriching}
+              onClick={async () => {
+                setEnriching(true);
+                try {
+                  await fetch("/api/plans/enrich", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ plan_id: plan.id }),
+                  });
+                  await onReload();
+                } catch { /* ignore */ }
+                setEnriching(false);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold flex-shrink-0 disabled:opacity-50"
+              style={{
+                background: "var(--color-accent-500)",
+                color: "#fff",
+              }}
+            >
+              {enriching ? <RefreshCw size={12} className="animate-spin" /> : <Sparkles size={12} />}
+              {enriching ? "Enriching…" : "Enrich Plan"}
+            </button>
+          </div>
+        )}
+
         {/* Progress card */}
         <div
           className="rounded-2xl p-5 mb-5"
@@ -403,57 +451,173 @@ function PlanDetail({ plan, onBack, onDayToggle }: {
         <div className="space-y-2">
           {plan.days.map((day) => {
             const done = !!day.completed_at;
+            const expanded = expandedId === day.id;
+            const hasRich = !!(day.reflection || day.verse_text);
+
             return (
               <div
                 key={day.id}
-                className="rounded-xl p-4 flex items-start gap-3 transition-all"
+                className="rounded-xl overflow-hidden transition-all"
                 style={{
                   background: "var(--surface-card)",
-                  border: `1px solid ${done ? "rgba(201,162,39,0.2)" : "var(--border)"}`,
-                  opacity: done ? 0.75 : 1,
+                  border: `1px solid ${done ? "rgba(201,162,39,0.2)" : expanded ? "rgba(201,162,39,0.3)" : "var(--border)"}`,
+                  opacity: done && !expanded ? 0.7 : 1,
                 }}
               >
+                {/* Compact row — always visible */}
                 <button
-                  onClick={() => onDayToggle(day.id, done)}
-                  className="flex-shrink-0 mt-0.5"
-                  aria-label={done ? "Mark incomplete" : "Mark complete"}
+                  className="w-full flex items-start gap-3 p-4 text-left"
+                  onClick={() => setExpandedId(expanded ? null : day.id)}
+                  aria-expanded={expanded}
                 >
-                  {done ? (
-                    <CheckCircle2 size={22} style={{ color: "var(--color-accent-500)" }} />
-                  ) : (
-                    <Circle size={22} style={{ color: "var(--border-strong)" }} />
-                  )}
-                </button>
+                  <span
+                    className="flex-shrink-0 mt-0.5"
+                    onClick={(e) => { e.stopPropagation(); onDayToggle(day.id, done); }}
+                    role="checkbox"
+                    aria-checked={done}
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.stopPropagation(); onDayToggle(day.id, done); } }}
+                  >
+                    {done ? (
+                      <CheckCircle2 size={22} style={{ color: "var(--color-accent-500)" }} />
+                    ) : (
+                      <Circle size={22} style={{ color: "var(--border-strong)" }} />
+                    )}
+                  </span>
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
-                      Day {day.day_number}
-                    </span>
-                    {done && (
-                      <span
-                        className="text-xs px-1.5 py-0.5 rounded-full"
-                        style={{ background: "rgba(201,162,39,0.15)", color: "var(--color-accent-500)" }}
-                      >
-                        Done
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
+                        Day {day.day_number}
                       </span>
+                      {done && (
+                        <span
+                          className="text-xs px-1.5 py-0.5 rounded-full"
+                          style={{ background: "rgba(201,162,39,0.15)", color: "var(--color-accent-500)" }}
+                        >
+                          Done
+                        </span>
+                      )}
+                    </div>
+                    <p
+                      className="text-sm font-semibold mt-0.5"
+                      style={{
+                        color: done ? "var(--text-muted)" : "var(--text-primary)",
+                        textDecoration: done ? "line-through" : "none",
+                      }}
+                    >
+                      {day.title_summary || day.reference}
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: "var(--color-accent-500)" }}>
+                      {day.reference}
+                    </p>
+                    {!expanded && day.content_snippet && (
+                      <p className="text-xs mt-1 leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                        {day.content_snippet}
+                      </p>
                     )}
                   </div>
-                  <p
-                    className="text-sm font-medium mt-0.5"
+
+                  <ChevronRight
+                    size={16}
+                    className="flex-shrink-0 mt-1 transition-transform duration-200"
                     style={{
-                      color: done ? "var(--text-muted)" : "var(--text-primary)",
-                      textDecoration: done ? "line-through" : "none",
+                      color: "var(--text-muted)",
+                      transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
+                      display: hasRich ? "block" : "none",
                     }}
+                  />
+                </button>
+
+                {/* Expanded rich content */}
+                {expanded && (
+                  <div
+                    className="px-4 pb-5 space-y-4"
+                    style={{ borderTop: "1px solid var(--border)" }}
                   >
-                    {day.reference}
-                  </p>
-                  {day.content_snippet && !done && (
-                    <p className="text-xs mt-1 leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                      {day.content_snippet}
-                    </p>
-                  )}
-                </div>
+                    {/* Verse text */}
+                    {day.verse_text && (
+                      <div className="pt-4">
+                        <p
+                          className="text-sm leading-relaxed font-heading"
+                          style={{
+                            color: "var(--text-primary)",
+                            fontStyle: "italic",
+                            lineHeight: 1.8,
+                          }}
+                        >
+                          "{day.verse_text}"
+                        </p>
+                        <p className="text-xs mt-1 font-semibold" style={{ color: "var(--color-accent-500)" }}>
+                          — {day.reference}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Reflection */}
+                    {day.reflection && (
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--text-muted)" }}>
+                          Reflection
+                        </p>
+                        <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                          {day.reflection}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Prayer prompt */}
+                    {day.prayer_prompt && (
+                      <div
+                        className="rounded-xl p-4"
+                        style={{
+                          background: "rgba(201,162,39,0.08)",
+                          border: "1px solid rgba(201,162,39,0.2)",
+                        }}
+                      >
+                        <p className="text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--color-accent-500)" }}>
+                          🙏 Prayer
+                        </p>
+                        <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                          {day.prayer_prompt}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Application */}
+                    {day.application && (
+                      <div
+                        className="rounded-xl p-4"
+                        style={{
+                          background: "rgba(59,130,246,0.06)",
+                          border: "1px solid rgba(59,130,246,0.15)",
+                        }}
+                      >
+                        <p className="text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: "#3b82f6" }}>
+                          ⚡ Apply Today
+                        </p>
+                        <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                          {day.application}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Mark complete button */}
+                    <button
+                      onClick={() => onDayToggle(day.id, done)}
+                      className="w-full py-3 rounded-xl text-sm font-semibold transition-all hover:opacity-90"
+                      style={{
+                        background: done
+                          ? "var(--surface-elevated)"
+                          : "linear-gradient(135deg, var(--color-accent-500), var(--color-accent-600))",
+                        color: done ? "var(--text-secondary)" : "#fff",
+                        border: done ? "1px solid var(--border)" : "none",
+                      }}
+                    >
+                      {done ? "Mark as Incomplete" : "Mark as Complete ✓"}
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -510,7 +674,7 @@ export default function ReadingPlansPage() {
       rawPlans.map(async (p) => {
         const { data: days } = await client
           .from("reading_plan_days")
-          .select("id, plan_id, day_number, reference, content_snippet, completed_at")
+          .select("id, plan_id, day_number, reference, title_summary, content_snippet, verse_text, reflection, prayer_prompt, application, completed_at")
           .eq("plan_id", p.id)
           .order("day_number");
 
@@ -612,6 +776,14 @@ export default function ReadingPlansPage() {
         plan={selectedPlan}
         onBack={() => setSelectedPlan(null)}
         onDayToggle={(dayId, done) => handleDayToggle(selectedPlan.id, dayId, done)}
+        onReload={async () => {
+          await loadPlans();
+          setPlans((prev) => {
+            const refreshed = prev.find((p) => p.id === selectedPlan.id);
+            if (refreshed) setSelectedPlan(refreshed);
+            return prev;
+          });
+        }}
       />
     );
   }

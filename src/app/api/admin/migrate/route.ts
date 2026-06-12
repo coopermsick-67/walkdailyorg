@@ -494,6 +494,13 @@ BEGIN
 
 END $outer$;
 
+-- reading_plan_days rich content columns
+ALTER TABLE public.reading_plan_days ADD COLUMN IF NOT EXISTS title_summary TEXT;
+ALTER TABLE public.reading_plan_days ADD COLUMN IF NOT EXISTS verse_text TEXT;
+ALTER TABLE public.reading_plan_days ADD COLUMN IF NOT EXISTS reflection TEXT;
+ALTER TABLE public.reading_plan_days ADD COLUMN IF NOT EXISTS prayer_prompt TEXT;
+ALTER TABLE public.reading_plan_days ADD COLUMN IF NOT EXISTS application TEXT;
+
 CREATE OR REPLACE FUNCTION public.increment_prayer_count(row_id UUID)
 RETURNS void AS $$
   UPDATE public.prayer_requests SET pray_count = pray_count + 1 WHERE id = row_id;
