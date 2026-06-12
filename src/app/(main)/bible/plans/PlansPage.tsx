@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   ArrowLeft,
   Calendar,
@@ -70,6 +70,19 @@ function GenerateModal({ onGenerate, onClose, generating }: GenerateModalProps) 
   const [duration, setDuration] = useState(30);
   const [theme, setTheme] = useState("Surprise me");
   const [customTopic, setCustomTopic] = useState("");
+  const [elapsed, setElapsed] = useState(0);
+  const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (generating) {
+      setElapsed(0);
+      elapsedRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
+    } else {
+      if (elapsedRef.current) clearInterval(elapsedRef.current);
+      setElapsed(0);
+    }
+    return () => { if (elapsedRef.current) clearInterval(elapsedRef.current); };
+  }, [generating]);
 
   return (
     <div
@@ -173,7 +186,7 @@ function GenerateModal({ onGenerate, onClose, generating }: GenerateModalProps) 
           {generating ? (
             <>
               <RefreshCw size={16} className="animate-spin" />
-              Generating your plan…
+              <span>Generating your personalized plan ({elapsed}s)</span>
             </>
           ) : (
             <>
@@ -182,6 +195,11 @@ function GenerateModal({ onGenerate, onClose, generating }: GenerateModalProps) 
             </>
           )}
         </button>
+        {generating && (
+          <p className="text-xs text-center mt-2" style={{ color: "var(--text-muted)" }}>
+            Can take 30–90s for longer plans — hang tight!
+          </p>
+        )}
       </div>
     </div>
   );

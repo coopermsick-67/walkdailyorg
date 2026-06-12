@@ -86,6 +86,7 @@ export default function BiblePage() {
     currentBook,
     currentChapterId,
     currentChapterVerses,
+    books,
     isLoading,
     error,
     navigateTo,
@@ -110,6 +111,10 @@ export default function BiblePage() {
   // Ref for the reading content area to track scroll
   const readingRef = useRef<HTMLDivElement>(null);
   const chapterCompleteFiredRef = useRef<string | null>(null);
+  // Swipe tracking
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+  const lastScrollTimeRef = useRef<number>(0);
 
   // Reset any stale IDB schema before touching IDB — runs once per session.
   // Nukes old DB names (v1 shared-DB bug) so idb-keyval can create clean stores.
@@ -151,6 +156,7 @@ export default function BiblePage() {
 
   // Handle scroll-to-bottom detection for chapter completion
   const handleReadingScroll = useCallback(() => {
+    lastScrollTimeRef.current = Date.now();
     if (!readingRef.current || chapterComplete) return;
 
     const el = readingRef.current;
@@ -200,28 +206,38 @@ export default function BiblePage() {
     setReadingMode(false);
   }, []);
 
-  // Previous / next chapter navigation
+  // Previous / next chapter navigation (handles book boundaries)
   const handlePrevChapter = useCallback(() => {
-    if (currentBook && currentChapterId) {
-      const { chapter } = (() => {
-        const parts = currentChapterId.split(".");
-        return { chapter: parseInt(parts[1], 10) };
-      })();
-      if (chapter > 1) {
-        navigateTo(currentBook, chapter - 1);
+    if (!currentBook || !currentChapterId) return;
+    const chapter = parseInt(currentChapterId.split(".")[1], 10);
+    if (chapter > 1) {
+      navigateTo(currentBook, chapter - 1);
+    } else {
+      const idx = books.findIndex((b) => b.id === currentBook.id);
+      if (idx > 0) {
+        const prevBook = books[idx - 1];
+        navigateTo(prevBook, prevBook.chapters.length);
+        setSelectedBook(prevBook);
+        setView("reading");
       }
     }
-  }, [currentBook, currentChapterId, navigateTo]);
+  }, [currentBook, currentChapterId, books, navigateTo]);
 
   const handleNextChapter = useCallback(() => {
-    if (currentBook && currentChapterId) {
-      const parts = currentChapterId.split(".");
-      const chapter = parseInt(parts[1], 10);
-      if (chapter < currentBook.chapters.length) {
-        navigateTo(currentBook, chapter + 1);
+    if (!currentBook || !currentChapterId) return;
+    const chapter = parseInt(currentChapterId.split(".")[1], 10);
+    if (chapter < currentBook.chapters.length) {
+      navigateTo(currentBook, chapter + 1);
+    } else {
+      const idx = books.findIndex((b) => b.id === currentBook.id);
+      if (idx >= 0 && idx < books.length - 1) {
+        const nextBook = books[idx + 1];
+        navigateTo(nextBook, 1);
+        setSelectedBook(nextBook);
+        setView("reading");
       }
     }
-  }, [currentBook, currentChapterId, navigateTo]);
+  }, [currentBook, currentChapterId, books, navigateTo]);
 
   // Verse tap handler
   const handleVerseTap = useCallback((verse: BibleVerse) => {
@@ -296,10 +312,35 @@ export default function BiblePage() {
   const chapterNum = currentChapterId
     ? parseInt(currentChapterId.split(".")[1], 10)
     : 0;
-  const hasPrev = chapterNum > 1;
+  const currentBookIdx = books.findIndex((b) => b.id === currentBook?.id);
+  const hasPrev = chapterNum > 1 || currentBookIdx > 0;
   const hasNext = currentBook
-    ? chapterNum < currentBook.chapters.length
+    ? chapterNum < currentBook.chapters.length || currentBookIdx < books.length - 1
     : false;
+
+  // Swipe handlers (reading view only)
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartXRef.current = e.touches[0].clientX;
+    touchStartYRef.current = e.touches[0].clientY;
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (touchStartXRef.current === null || touchStartYRef.current === null) return;
+    // Don't swipe if text is selected
+    if (window.getSelection()?.toString()) return;
+    // Don't swipe if the user was recently scrolling vertically
+    if (Date.now() - lastScrollTimeRef.current < 300) return;
+
+    const deltaX = e.changedTouches[0].clientX - touchStartXRef.current;
+    const deltaY = Math.abs(e.changedTouches[0].clientY - touchStartYRef.current);
+
+    if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > deltaY) {
+      if (deltaX < 0) handleNextChapter();
+      else handlePrevChapter();
+    }
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+  }, [handlePrevChapter, handleNextChapter]);
 
   // Reading mode: tap anywhere to exit
   const handleReadingModeTap = useCallback(() => {
@@ -478,6 +519,8 @@ export default function BiblePage() {
         className="flex-1 overflow-y-auto"
         onScroll={view === "reading" ? handleReadingScroll : undefined}
         onClick={readingMode ? handleReadingModeTap : undefined}
+        onTouchStart={view === "reading" ? handleTouchStart : undefined}
+        onTouchEnd={view === "reading" ? handleTouchEnd : undefined}
       >
         {view === "books" && (
           <div className="flex flex-col h-full">
