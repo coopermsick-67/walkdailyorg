@@ -358,7 +358,8 @@ export const useBibleStore = create<BibleState>((set, get) => ({
 
   loadDailyVerse: async () => {
     const bibleId = get().currentBibleId;
-    const today = new Date().toISOString().split("T")[0];
+    // Use America/New_York date for consistent daily rollover
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 
     // Try cache — only use it when the translation matches
     const cached = await getCachedDailyVerse();
@@ -367,7 +368,6 @@ export const useBibleStore = create<BibleState>((set, get) => ({
       return;
     }
 
-    // Get the reference first (from Supabase or fallback)
     let reference: string;
     let baseText: string;
     let baseTranslation: string;
@@ -375,18 +375,29 @@ export const useBibleStore = create<BibleState>((set, get) => ({
     try {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
-      // Use a canonical year-2000 date so DB entries repeat annually
-      const now = new Date();
-      const canonicalDate = new Date(2000, now.getMonth(), now.getDate()).toISOString().split("T")[0];
-      const { data } = await supabase
+      // Try today's actual NY date first, then canonical year-2000 schedule
+      const [, month, day] = today.split("-");
+      const canonicalDate = `2000-${month}-${day}`;
+      const { data: exact } = await supabase
         .from("daily_verses")
-        .select("date, reference, verse_text, translation")
-        .eq("date", canonicalDate)
-        .single();
+        .select("reference, verse_text, translation")
+        .eq("date", today)
+        .maybeSingle();
+
+      let data = exact;
+      if (!data) {
+        const { data: annual } = await supabase
+          .from("daily_verses")
+          .select("reference, verse_text, translation")
+          .eq("date", canonicalDate)
+          .maybeSingle();
+        data = annual;
+      }
 
       if (data) {
         reference = data.reference;
-        baseText = data.verse_text;
+        // Strip any accidental "BookName Chapter " prefix
+        baseText = data.verse_text.replace(/^(?:\d\s+)?[A-Z][a-zA-Z ]+\d+\s+/, "").trim();
         baseTranslation = data.translation || "KJV";
       } else {
         const fallback = getFallbackDailyVerse();
@@ -401,13 +412,13 @@ export const useBibleStore = create<BibleState>((set, get) => ({
       baseTranslation = fallback.translation;
     }
 
-    // Try to fetch the verse in the user's current translation
+    // Fetch in user's current translation
     let text = baseText;
     let translation = baseTranslation;
     if (bibleId !== "kjv") {
       const fetched = await getVerseByReference(bibleId, reference);
       if (fetched) {
-        text = fetched.text;
+        text = fetched.text.replace(/^(?:\d\s+)?[A-Z][a-zA-Z ]+\d+\s+/, "").trim();
         translation = fetched.translation;
       }
     }

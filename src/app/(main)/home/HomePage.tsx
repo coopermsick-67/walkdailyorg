@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { BookOpen, BookMarked, Sparkles, ChevronRight, Brain, PenLine, Heart } from "lucide-react";
-import { getFallbackDailyVerse, getVerseByReference, SUPPORTED_TRANSLATIONS } from "@/lib/bible-api";
+import { getDailyVerse } from "@/lib/daily-verse";
 import LevelBadge from "@/components/home/LevelBadge";
 import StreakBadge from "@/components/home/StreakBadge";
 
@@ -283,38 +283,7 @@ export default function HomePage() {
   const loadDailyVerse = useCallback(async () => {
     try {
       const supabase = createClient();
-      const today = new Date().toISOString().split("T")[0];
-
-      // Get the reference (from DB or fallback)
-      let reference: string;
-      let baseText: string;
-      let baseTranslation: string;
-      try {
-        const { data } = await supabase
-          .from("daily_verses")
-          .select("reference, verse_text, translation")
-          .eq("date", today)
-          .single();
-        if (data) {
-          reference = data.reference;
-          baseText = data.verse_text;
-          baseTranslation = data.translation || "KJV";
-        } else {
-          const fb = getFallbackDailyVerse();
-          reference = fb.reference;
-          baseText = fb.text;
-          baseTranslation = fb.translation;
-        }
-      } catch {
-        const fb = getFallbackDailyVerse();
-        reference = fb.reference;
-        baseText = fb.text;
-        baseTranslation = fb.translation;
-      }
-
-      // Translate to the user's preferred translation
-      let text = baseText;
-      let translation = baseTranslation;
+      let preferredTranslation: string | undefined;
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
@@ -323,26 +292,15 @@ export default function HomePage() {
             .select("preferred_translation")
             .eq("id", user.id)
             .single();
-          const pref = profileData?.preferred_translation as string | undefined;
-          if (pref && pref !== baseTranslation) {
-            const translationObj = SUPPORTED_TRANSLATIONS.find((t) => t.abbreviation === pref);
-            if (translationObj) {
-              const fetched = await getVerseByReference(translationObj.id, reference);
-              if (fetched) {
-                text = fetched.text;
-                translation = pref;
-              }
-            }
-          }
+          preferredTranslation = profileData?.preferred_translation as string | undefined;
         }
       } catch {
-        // Profile fetch failed — show the base translation
+        // silent — use base translation
       }
-
-      setDailyVerse({ reference, text, translation });
+      const verse = await getDailyVerse(supabase, preferredTranslation);
+      setDailyVerse(verse);
     } catch {
-      const fallback = getFallbackDailyVerse();
-      setDailyVerse(fallback);
+      setDailyVerse(null);
     }
     setLoadingVerse(false);
   }, []);
