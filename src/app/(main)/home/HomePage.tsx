@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
-import { BookOpen, BookMarked, Sparkles, ChevronRight, Brain, PenLine, Heart } from "lucide-react";
+import { BookOpen, BookMarked, Sparkles, ChevronRight, Brain, PenLine, Heart, Bell, BellOff } from "lucide-react";
 import { getDailyVerse } from "@/lib/daily-verse";
 import LevelBadge from "@/components/home/LevelBadge";
 import StreakBadge from "@/components/home/StreakBadge";
@@ -18,6 +18,8 @@ interface UserProfile {
   streak_days: number;
   current_reading_book: string | null;
   current_reading_chapter: number | null;
+  push_notifications_enabled: boolean | null;
+  daily_reminder_hour: number | null;
 }
 
 interface DailyVerse {
@@ -165,6 +167,7 @@ export default function HomePage() {
   const { success: toastSuccess } = useToast();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [dailyVerse, setDailyVerse] = useState<DailyVerse | null>(null);
   const [prayers, setPrayers] = useState<PrayerSummary[]>([]);
   const [memoryCards, setMemoryCards] = useState<MemoryCard[]>([]);
@@ -242,7 +245,7 @@ export default function HomePage() {
           ...tzUpdate,
         })
         .eq("id", user.id)
-        .select("display_name, streak_days, current_reading_book, current_reading_chapter")
+        .select("display_name, streak_days, current_reading_book, current_reading_chapter, push_notifications_enabled, daily_reminder_hour")
         .single();
 
       if (updated) setProfile(updated);
@@ -259,9 +262,10 @@ export default function HomePage() {
         setLoadingProfile(false);
         return;
       }
+      setUserId(user.id);
       const { data } = await supabase
         .from("profiles")
-        .select("display_name, streak_days, current_reading_book, current_reading_chapter")
+        .select("display_name, streak_days, current_reading_book, current_reading_chapter, push_notifications_enabled, daily_reminder_hour")
         .eq("id", user.id)
         .single();
       if (data) {
@@ -789,6 +793,196 @@ export default function HomePage() {
           </div>
         )}
       </section>
+
+      {/* 6. Daily Reminder */}
+      {userId && !loadingProfile && (
+        <section className="mb-5">
+          <h2
+            className="text-xs font-semibold uppercase tracking-wider mb-2"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Daily Reminder
+          </h2>
+          <DailyReminderCard
+            userId={userId}
+            initialEnabled={profile?.push_notifications_enabled ?? false}
+            initialHour={profile?.daily_reminder_hour ?? 8}
+          />
+        </section>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Daily Reminder Card                                               */
+/* ------------------------------------------------------------------ */
+
+const VAPID_PUBLIC = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
+
+function DailyReminderCard({
+  userId,
+  initialEnabled,
+  initialHour,
+}: {
+  userId: string;
+  initialEnabled: boolean;
+  initialHour: number;
+}) {
+  const [enabled, setEnabled] = useState(initialEnabled);
+  const [hour, setHour] = useState(initialHour);
+  const [toggling, setToggling] = useState(false);
+  const { success, error: toastError, info } = useToast();
+
+  const supported =
+    typeof window !== "undefined" &&
+    "serviceWorker" in navigator &&
+    "PushManager" in window &&
+    "Notification" in window;
+
+  const handleToggle = async () => {
+    if (!supported) {
+      toastError("Push notifications are not supported in this browser.");
+      return;
+    }
+    setToggling(true);
+    const supabase = createClient();
+    try {
+      if (enabled) {
+        const { data: subs } = await supabase
+          .from("push_subscriptions")
+          .select("endpoint")
+          .eq("user_id", userId);
+        for (const sub of subs ?? []) {
+          await fetch("/api/push/subscribe", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ endpoint: (sub as { endpoint: string }).endpoint }),
+          });
+        }
+        setEnabled(false);
+        info("Daily reminder turned off.");
+      } else {
+        const permission = await Notification.requestPermission();
+        if (permission !== "granted") {
+          toastError("Notification permission denied. Enable it in browser settings.");
+          return;
+        }
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: VAPID_PUBLIC,
+        });
+        const res = await fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subscription: sub }),
+        });
+        if (!res.ok) throw new Error("Subscribe failed");
+        await supabase
+          .from("profiles")
+          .update({ daily_reminder_hour: hour })
+          .eq("id", userId);
+        setEnabled(true);
+        success("Daily reminder set!");
+      }
+    } catch (e) {
+      toastError(e instanceof Error ? e.message : "Could not update reminder");
+    } finally {
+      setToggling(false);
+    }
+  };
+
+  const handleTimeChange = async (val: string) => {
+    const h = parseInt(val.split(":")[0], 10);
+    if (isNaN(h)) return;
+    setHour(h);
+    const supabase = createClient();
+    await supabase
+      .from("profiles")
+      .update({ daily_reminder_hour: h })
+      .eq("id", userId);
+  };
+
+  const timeStr = `${String(hour).padStart(2, "0")}:00`;
+  const displayTime = new Date(2000, 0, 1, hour).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+
+  if (!supported) return null;
+
+  return (
+    <div
+      className="rounded-2xl p-4 flex items-center gap-4"
+      style={{
+        background: "var(--surface-card)",
+        boxShadow: "var(--shadow-sm)",
+        border: "1px solid var(--border)",
+      }}
+    >
+      <div
+        className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+        style={{
+          background: enabled
+            ? "rgba(201,162,39,0.12)"
+            : "rgba(100,116,139,0.1)",
+        }}
+      >
+        {enabled ? (
+          <Bell size={20} style={{ color: "var(--color-accent-500)" }} />
+        ) : (
+          <BellOff size={20} style={{ color: "var(--text-muted)" }} />
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p
+          className="text-sm font-semibold font-heading"
+          style={{ color: "var(--text-primary)" }}
+        >
+          Daily Reminder
+        </p>
+        {enabled ? (
+          <div className="flex items-center gap-2 mt-1">
+            <input
+              type="time"
+              value={timeStr}
+              onChange={(e) => handleTimeChange(e.target.value)}
+              className="text-xs rounded-lg px-2 py-1"
+              style={{
+                background: "var(--surface-elevated)",
+                color: "var(--text-secondary)",
+                border: "1px solid var(--border)",
+              }}
+              aria-label="Reminder time"
+            />
+            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+              {displayTime}
+            </span>
+          </div>
+        ) : (
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            Get a daily Scripture nudge
+          </p>
+        )}
+      </div>
+      <button
+        onClick={handleToggle}
+        disabled={toggling}
+        className="text-sm font-semibold px-4 rounded-xl flex-shrink-0 transition-all"
+        style={{
+          background: enabled
+            ? "rgba(239,68,68,0.08)"
+            : "var(--color-accent-500)",
+          color: enabled ? "#ef4444" : "#fff",
+          minHeight: 40,
+          opacity: toggling ? 0.6 : 1,
+        }}
+        aria-label={enabled ? "Turn off daily reminder" : "Turn on daily reminder"}
+      >
+        {toggling ? "..." : enabled ? "Off" : "On"}
+      </button>
     </div>
   );
 }
