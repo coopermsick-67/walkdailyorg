@@ -306,10 +306,6 @@ BEGIN
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
   ALTER TABLE public.groups ENABLE ROW LEVEL SECURITY;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='groups' AND policyname='Members can view their groups') THEN
-    CREATE POLICY "Members can view their groups" ON public.groups FOR SELECT
-      USING (EXISTS (SELECT 1 FROM public.group_members gm WHERE gm.group_id = id AND gm.user_id = auth.uid()));
-  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='groups' AND policyname='Authenticated users can create groups') THEN
     CREATE POLICY "Authenticated users can create groups" ON public.groups FOR INSERT WITH CHECK (auth.uid() = owner_id);
   END IF;
@@ -330,6 +326,12 @@ BEGIN
     UNIQUE(group_id, user_id)
   );
   ALTER TABLE public.group_members ENABLE ROW LEVEL SECURITY;
+  -- "Members can view their groups" policy deferred here because it references group_members
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='groups' AND policyname='Members can view their groups') THEN
+    CREATE POLICY "Members can view their groups" ON public.groups FOR SELECT
+      USING (EXISTS (SELECT 1 FROM public.group_members gm WHERE gm.group_id = id AND gm.user_id = auth.uid()));
+  END IF;
+
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='group_members' AND policyname='Group members can view each other') THEN
     CREATE POLICY "Group members can view each other" ON public.group_members FOR SELECT
       USING (EXISTS (SELECT 1 FROM public.group_members gm2 WHERE gm2.group_id = group_id AND gm2.user_id = auth.uid()));
